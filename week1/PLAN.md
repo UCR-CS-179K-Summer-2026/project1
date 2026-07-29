@@ -71,7 +71,7 @@ We will only use C++
 
 ## Assignments
 
-### Person 1 (Ryan) — JSON parser and data model
+### Person 1 (Jules) — JSON parser and data model
 
 Own the actual conversion from JSON text into an internal C++ structure.
 
@@ -97,7 +97,7 @@ Own the actual conversion from JSON text into an internal C++ structure.
 
 This is probably the most technically involved Sprint 1 assignment.
 
-### Person 2 (Jules) — JSONL reader and lookup engine
+### Person 2 (Javier) — JSONL reader and lookup engine
 
 Own everything that happens after one JSON object can be parsed.
 
@@ -123,7 +123,7 @@ Own everything that happens after one JSON object can be parsed.
 
 This gives you the beginning of the query engine without prematurely building the full Sprint 2 language.
 
-### Person 3 (Javier) — CLI, testing, and integration
+### Person 3 (Ryan) — CLI, testing, and integration
 
 Own the executable that connects everyone's work and proves it works.
 
