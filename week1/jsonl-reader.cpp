@@ -1,28 +1,42 @@
 #include "jsonl-reader.h"
 
 #include <fstream>
+#include <iostream>
 #include <sstream>
+#include <stdexcept>
 
 std::vector<JsonValue> readJsonlFile(const std::string& path) {
     std::ifstream file(path);
-    // TODO: handle the file-not-found / can't-open case. Throw? Return empty
-    // and let the caller check? Decide and document it here.
+    if (!file.is_open()) {
+        throw std::runtime_error(
+            "Could not open '" + path + "'. Check that the path is spelled "
+            "correctly, that the file exists, and that you're running the "
+            "program from the directory you expect (try an absolute path "
+            "if you're not sure).");
+    }
 
     std::vector<JsonValue> records;
     std::string line;
+    int lineNumber = 0;
 
     while (std::getline(file, line)) {
-        // TODO: skip blank lines here, or is an empty line a malformed record?
+        ++lineNumber;
 
-        // TODO: send `line` into Person 1's parser:
-        //   JsonValue record = parseJson(line);
-        //   records.push_back(std::move(record));
-        //
-        // TODO: what happens if parseJson() fails on one line? Options:
-        //   - let it throw and crash the whole read
-        //   - catch it, print a warning, and skip that line
-        //   - catch it and store some kind of "error record"
-        // Pick one and make it consistent with lookup()'s error handling below.
+        // Blank line (or whitespace-only): store null rather than skipping,
+        // so records[i] always corresponds to line i in the file.
+        if (line.find_first_not_of(" \t\r\n") == std::string::npos) {
+            records.push_back(JsonValue(nullptr));
+            continue;
+        }
+
+        try {
+            records.push_back(parseJson(line));
+        } catch (const std::exception& e) {
+            std::cerr << "Warning: line " << lineNumber
+                      << ": failed to parse (" << e.what() << "), "
+                      << "storing as null.\n";
+            records.push_back(JsonValue(nullptr));
+        }
     }
 
     return records;
