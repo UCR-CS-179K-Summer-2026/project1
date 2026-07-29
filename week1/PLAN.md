@@ -1,9 +1,7 @@
-# JSON/JSONL Parser
-## Team
+# Sprint 1 Plan
 
-| Javier Herrera Jr 
-| Jules
-| Ryan
+See the [root README](../README.md) for the project summary, team list, and
+feature overview. This file tracks Sprint 1's tasks and who owns what.
 
 ---
 
@@ -27,51 +25,9 @@ We will only use C++
     - Describe feature sets
     - Work on sprint 1 which is a basic JSON parser with no performance
 
-## JSON Examples
-
-    - Sort
-        Query: SORT(a, “asc”)
-
-        JSON: [{"a": 1, "b": 2}, {"a": 0, "b": 3}]
-
-        The answer should be [{"a": 0, "b": 3}, {"a": 1, "b": 2}]
-    - Limit
-        Query: LIMIT(1)
-
-        JSON: [{"a": 1, "b": 2}, {"a": 0, "b": 3}]
-
-        The answer should be {"a": 1, "b": 2}
-    - Get
-        Query: .a
-
-        JSON: {“a”: 1, “b”: 2}
-
-        The answer should be 1
-    - GroupBy
-        Query: GROUPBY(.a)
-
-        JSON: [{"a": 1, "b": 2}, {"a": 0, "b": 3}, {"a": 1, "b": 5}]
-
-        The answer should be: {
- 	    "0": [{"a": 0, "b": 3}],
- 	    "1": [{"a": 1, "b": 2}, {"a": 1, "b": 5}]
-        }
-    - Filter & Comparison
-        Query: FILTER(.a > 1)
-
-	    JSON: [{"a": 1, "b": 2}, {"a": 2, "b": 2}]
-
-	    The answer should be [{"a": 2, "b": 2}]
-    - Average
-        Query: GROUPBY(.city) | AVERAGE(.price)
-
-        JSON: [{"id": 1, "city": "Riverside", "price": 450000}, {"id": 2, "city": "Riverside", "price": 480000}, {"id": 3, "city": "Los Angeles", "price": 800000}, {"id": 4, "city": "Riverside", "price": 460000}]
-
-        The answer should be {"Riverside": 463333.33, "Los Angeles": 800000}
-
 ## Assignments
 
-### Person 1 (Ryan) — JSON parser and data model
+### Person 1 (Jules) — JSON parser and data model
 
 Own the actual conversion from JSON text into an internal C++ structure.
 
@@ -97,7 +53,7 @@ Own the actual conversion from JSON text into an internal C++ structure.
 
 This is probably the most technically involved Sprint 1 assignment.
 
-### Person 2 (Jules) — JSONL reader and lookup engine
+### Person 2 (Javier) — JSONL reader and lookup engine
 
 Own everything that happens after one JSON object can be parsed.
 
@@ -123,7 +79,7 @@ Own everything that happens after one JSON object can be parsed.
 
 This gives you the beginning of the query engine without prematurely building the full Sprint 2 language.
 
-### Person 3 (Javier) — CLI, testing, and integration
+### Person 3 (Ryan) — CLI, testing, and integration
 
 Own the executable that connects everyone's work and proves it works.
 
