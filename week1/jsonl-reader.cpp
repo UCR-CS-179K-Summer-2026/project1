@@ -5,7 +5,7 @@
 #include <sstream>
 #include <stdexcept>
 
-std::vector<JsonValue> readJsonlFile(const std::string& path) {
+std::vector<JSONValue> readJsonlFile(const std::string& path) {
     std::ifstream file(path);
     if (!file.is_open()) {
         throw std::runtime_error(
@@ -15,7 +15,7 @@ std::vector<JsonValue> readJsonlFile(const std::string& path) {
             "if you're not sure).");
     }
 
-    std::vector<JsonValue> records;
+    std::vector<JSONValue> records;
     std::string line;
     int lineNumber = 0;
 
@@ -25,24 +25,26 @@ std::vector<JsonValue> readJsonlFile(const std::string& path) {
         // Blank line (or whitespace-only): store null rather than skipping,
         // so records[i] always corresponds to line i in the file.
         if (line.find_first_not_of(" \t\r\n") == std::string::npos) {
-            records.push_back(JsonValue(nullptr));
+            records.push_back(JSONValue(ValueType::Null, nullptr));
             continue;
         }
 
+        Parser parser(line);
+
         try {
-            records.push_back(parseJson(line));
+            records.push_back(parser.parse());
         } catch (const std::exception& e) {
             std::cerr << "Warning: line " << lineNumber
                       << ": failed to parse (" << e.what() << "), "
                       << "storing as null.\n";
-            records.push_back(JsonValue(nullptr));
+            records.push_back(JSONValue(ValueType::Null, nullptr));
         }
     }
 
     return records;
 }
 
-LookupResult lookup(const JsonValue& value, const std::string& path) {
+LookupResult lookup(const JSONValue& value, const std::string& path) {
     // TODO: parse `path` into a sequence of steps, e.g.
     //   ".student.name"  -> [Field("student"), Field("name")]
     //   ".scores[0]"     -> [Field("scores"), Index(0)]
