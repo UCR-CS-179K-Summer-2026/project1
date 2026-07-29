@@ -1,16 +1,16 @@
 #include "parser.h"
 
-JSONValue Parser::parse() {
+JSONValuePtr Parser::parse() {
     switch(currToken.type) {
         case TokenType::LBrace: {
-            vector<pair<string_view, JSONValue>> object;
+            vector<pair<string, JSONValuePtr>> object;
             currToken = scanner.scan();
 
             while(currToken.type != TokenType::RBrace) {
                 if(currToken.type != TokenType::String) {
                     throw runtime_error("Expected string key in object");
                 }
-                string_view key = currToken.value;
+                string key(currToken.value);
                 currToken = scanner.scan();
 
                 if(currToken.type != TokenType::Colon) {
@@ -18,8 +18,8 @@ JSONValue Parser::parse() {
                 }
                 currToken = scanner.scan();
 
-                JSONValue value = parse();
-                object.emplace_back(key, value);
+                JSONValuePtr value = parse();
+                object.emplace_back(std::move(key), std::move(value));
 
                 if(currToken.type == TokenType::Comma) {
                     currToken = scanner.scan();
@@ -28,16 +28,15 @@ JSONValue Parser::parse() {
                 }
             }
             currToken = scanner.scan();
-            return JSONValue(ValueType::Object, object);
+            return make_unique<JSONObject>(std::move(object));
         }
 
         case TokenType::LBracket: {
-            vector<JSONValue> array;
+            vector<JSONValuePtr> array;
             currToken = scanner.scan();
 
             while(currToken.type != TokenType::RBracket) {
-                JSONValue value = parse();
-                array.push_back(value);
+                array.push_back(parse());
 
                 if(currToken.type == TokenType::Comma) {
                     currToken = scanner.scan();
@@ -46,30 +45,30 @@ JSONValue Parser::parse() {
                 }
             }
             currToken = scanner.scan();
-            return JSONValue(ValueType::Array, array);
+            return make_unique<JSONArray>(std::move(array));
         }
 
         case TokenType::String: {
-            string_view str = currToken.value;
+            string str(currToken.value);
             currToken = scanner.scan();
-            return JSONValue(ValueType::String, str);
+            return make_unique<JSONString>(std::move(str));
         }
 
         case TokenType::Number: {
             double num = stod(string(currToken.value));
             currToken = scanner.scan();
-            return JSONValue(ValueType::Number, num);
+            return make_unique<JSONNumber>(num);
         }
 
         case TokenType::Boolean: {
             bool b = (currToken.value == "true");
             currToken = scanner.scan();
-            return JSONValue(ValueType::Boolean, b);
+            return make_unique<JSONBoolean>(b);
         }
 
         case TokenType::Null: {
             currToken = scanner.scan();
-            return JSONValue(ValueType::Null, nullptr);
+            return make_unique<JSONNull>();
         }
 
         default:

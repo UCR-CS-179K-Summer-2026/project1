@@ -9,5 +9,5 @@ class Parser {
     public:
     Parser(std::string_view json) : scanner(json), currToken(scanner.scan()) {}
 
-    JSONValue parse();
+    JSONValuePtr parse();
 };

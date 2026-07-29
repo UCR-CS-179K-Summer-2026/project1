@@ -36,23 +36,23 @@ Token Scanner::scan() {
 
     if(*curr == '\"') {
         curr++;
-
         const char* stringBegin = curr;
-        const char* lookahead = curr++;
 
-        while(curr < end) {
-            if(*lookahead == '\\') {
-                lookahead++;
-                curr++;
-            } else if(*lookahead == '\"') {
-                string_view str(stringBegin, lookahead - stringBegin);
-                curr++;
-                return Token(TokenType::String, str);
+        while(curr < end && *curr != '\"') {
+            if(*curr == '\\' && curr + 1 < end) {
+                curr += 2;
             } else {
-                lookahead++;
                 curr++;
             }
         }
+
+        if(curr >= end) {
+            throw runtime_error("Unterminated string");
+        }
+
+        string_view str(stringBegin, curr - stringBegin);
+        curr++;  // skip closing quote
+        return Token(TokenType::String, str);
     }
 
     if(*curr == 't' && curr + 3 < end && *(curr + 1) == 'r' && *(curr + 2) == 'u' && *(curr + 3) == 'e') {
@@ -78,7 +78,7 @@ Token Scanner::scan() {
         }
 
         regex pattern(R"(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)");
-        string str{numberBegin, curr - numberBegin};
+        string str(numberBegin, curr - numberBegin);
 
         if(regex_match(str, pattern)) {
             string_view num(numberBegin, curr - numberBegin);
