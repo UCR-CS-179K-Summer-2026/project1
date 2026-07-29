@@ -11,8 +11,9 @@ using namespace std;
     'Single quotes' are also invalid for strings
     Trailing commas are invalid- this means the last element in an array/object cannot be followed by a comma
     Blackslash\ precedes a literal*/
+class JSONValue;
 
-enum class ValueType : uint8_t {array, boolean, null, number, object, string};
+enum class ValueType : uint8_t {Array, Boolean, Null, Number, Object, String};
 
 using ArrayValue = vector<JSONValue>;
 using ObjectValue = vector<pair<string_view, JSONValue>>;
