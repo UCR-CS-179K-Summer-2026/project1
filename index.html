@@ -3,9 +3,399 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Hello, world!</title>
+    <title>JSON/JSONL Parser — Design</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --bg-alt: #f5f6f8;
+        --fg: #1c1e21;
+        --fg-muted: #55585e;
+        --border: #e1e3e6;
+        --accent: #3457d5;
+        --code-bg: #f0f1f4;
+        --box-bg: #ffffff;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #16171a;
+          --bg-alt: #1e2023;
+          --fg: #eceef0;
+          --fg-muted: #a8acb3;
+          --border: #33363b;
+          --accent: #7c93ff;
+          --code-bg: #232529;
+          --box-bg: #1e2023;
+        }
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        line-height: 1.6;
+      }
+
+      header {
+        background: var(--bg-alt);
+        border-bottom: 1px solid var(--border);
+        padding: 2.5rem 1.5rem 2rem;
+        text-align: center;
+      }
+
+      header h1 { margin: 0 0 0.4rem; font-size: 2rem; }
+      header p { margin: 0; color: var(--fg-muted); }
+
+      header .links { margin-top: 1rem; }
+      header .links a {
+        color: var(--accent);
+        text-decoration: none;
+        margin: 0 0.6rem;
+        font-weight: 500;
+      }
+      header .links a:hover { text-decoration: underline; }
+
+      nav {
+        position: sticky;
+        top: 0;
+        background: var(--bg);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: center;
+        gap: 1.5rem;
+        padding: 0.75rem 1rem;
+        flex-wrap: wrap;
+        z-index: 10;
+      }
+      nav a {
+        color: var(--fg-muted);
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 500;
+      }
+      nav a:hover { color: var(--accent); }
+
+      main {
+        max-width: 880px;
+        margin: 0 auto;
+        padding: 2.5rem 1.5rem 4rem;
+      }
+
+      section { margin-bottom: 3rem; }
+      section h2 {
+        font-size: 1.4rem;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 0.5rem;
+        margin-bottom: 1.2rem;
+      }
+      section h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; }
+
+      p { color: var(--fg); }
+      .muted { color: var(--fg-muted); }
+
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        background: var(--code-bg);
+        padding: 0.15em 0.4em;
+        border-radius: 4px;
+        font-size: 0.9em;
+      }
+      pre {
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem;
+        overflow-x: auto;
+      }
+      pre code { background: none; padding: 0; }
+
+      /* architecture pipeline */
+      .pipeline {
+        display: flex;
+        align-items: stretch;
+        gap: 0.5rem;
+        overflow-x: auto;
+        padding: 1rem 0;
+      }
+      .pipeline .stage {
+        flex: 1 1 0;
+        min-width: 190px;
+        background: var(--box-bg);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1rem;
+      }
+      .pipeline .stage h4 {
+        margin: 0 0 0.3rem;
+        font-size: 0.95rem;
+      }
+      .pipeline .stage .owner {
+        font-size: 0.8rem;
+        color: var(--accent);
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+      }
+      .pipeline .stage ul {
+        margin: 0;
+        padding-left: 1.1rem;
+        font-size: 0.85rem;
+        color: var(--fg-muted);
+      }
+      .pipeline .arrow {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--fg-muted);
+        font-size: 1.4rem;
+        min-width: 1.5rem;
+      }
+      @media (max-width: 640px) {
+        .pipeline { flex-direction: column; }
+        .pipeline .arrow { transform: rotate(90deg); }
+      }
+
+      /* feature cards */
+      .feature {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem 1.2rem;
+        margin-bottom: 1rem;
+        background: var(--box-bg);
+      }
+      .feature h3 { margin-top: 0; }
+      .feature dl { margin: 0.5rem 0 0; }
+      .feature dt {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--fg-muted);
+        margin-top: 0.6rem;
+      }
+      .feature dd { margin: 0.15rem 0 0; }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+      }
+      th, td {
+        text-align: left;
+        padding: 0.55rem 0.7rem;
+        border-bottom: 1px solid var(--border);
+      }
+      th { color: var(--fg-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
+
+      .callout {
+        border-left: 3px solid var(--accent);
+        background: var(--bg-alt);
+        padding: 0.8rem 1rem;
+        border-radius: 0 6px 6px 0;
+        font-size: 0.92rem;
+      }
+
+      footer {
+        text-align: center;
+        color: var(--fg-muted);
+        font-size: 0.85rem;
+        padding: 2rem 1rem 3rem;
+        border-top: 1px solid var(--border);
+      }
+      footer a { color: var(--accent); }
+    </style>
   </head>
   <body>
-    <h1>Hello, world!</h1>
+    <header>
+      <h1>JSON/JSONL Parser</h1>
+      <p>A low-memory command-line tool for parsing and querying JSON &amp; JSONL files — Javier Herrera Jr, Jules, Ryan</p>
+      <div class="links">
+        <a href="https://github.com/UCR-CS-179K-Summer-2026/project1">Repo</a>
+        <a href="https://github.com/UCR-CS-179K-Summer-2026/project1/blob/main/README.md">README</a>
+        <a href="https://github.com/UCR-CS-179K-Summer-2026/project1/blob/main/week1/PLAN.md">Sprint 1 Plan</a>
+      </div>
+    </header>
+
+    <nav>
+      <a href="#architecture">Architecture</a>
+      <a href="#interfaces">Module Interfaces</a>
+      <a href="#edge-cases">Edge Cases</a>
+      <a href="#query-language">Query Language</a>
+      <a href="#algorithms">Algorithms</a>
+    </nav>
+
+    <main>
+      <section id="architecture">
+        <h2>System Architecture</h2>
+        <p>Three modules for Sprint 1, one per team member, connected by a shared <code>JsonValue</code> tree.</p>
+
+        <div class="pipeline">
+          <div class="stage">
+            <div class="owner">Jules</div>
+            <h4>JSON parser &amp; data model</h4>
+            <ul>
+              <li><code>JsonValue</code> type</li>
+              <li><code>parseJson()</code></li>
+            </ul>
+          </div>
+          <div class="arrow">&#8594;</div>
+          <div class="stage">
+            <div class="owner">Javier</div>
+            <h4>JSONL reader / lookup engine</h4>
+            <ul>
+              <li><code>readJsonlFile()</code></li>
+              <li><code>lookup()</code></li>
+              <li><code>formatResult()</code></li>
+            </ul>
+          </div>
+          <div class="arrow">&#8594;</div>
+          <div class="stage">
+            <div class="owner">Ryan</div>
+            <h4>CLI, testing &amp; integration</h4>
+            <ul>
+              <li><code>sluice</code> executable</li>
+              <li>unit tests</li>
+              <li>CMake build</li>
+            </ul>
+          </div>
+        </div>
+
+        <p class="muted">
+          A <code>.jsonl</code> file flows in on the left: each line is parsed into a
+          <code>JsonValue</code> tree, the lookup engine walks that tree to answer a
+          query, and the CLI wires it all together into one runnable program.
+        </p>
+      </section>
+
+      <section id="interfaces">
+        <h2>Module Interfaces</h2>
+
+        <h3>JSON parser (Jules)</h3>
+        <p class="muted">A tagged union representing any JSON value: null, bool, number, string, object (<code>map&lt;string, JsonValue&gt;</code>), or array (<code>vector&lt;JsonValue&gt;</code>).</p>
+        <pre><code>JsonValue parseJson(const std::string&amp; text);</code></pre>
+
+        <h3>JSONL reader / lookup engine (Javier)</h3>
+        <pre><code>std::vector&lt;JsonValue&gt; readJsonlFile(const std::string&amp; path);
+
+struct LookupResult {
+    bool ok;
+    JsonValue value;    // valid when ok == true
+    std::string error;  // valid when ok == false
+};
+
+LookupResult lookup(const JsonValue&amp; value, const std::string&amp; path);
+std::string formatResult(const LookupResult&amp; result);</code></pre>
+
+        <h3>CLI (Ryan)</h3>
+        <pre><code>./sluice students.jsonl ".student.name"</code></pre>
+      </section>
+
+      <section id="edge-cases">
+        <h2>Edge Case Handling</h2>
+        <table>
+          <thead>
+            <tr><th>Case</th><th>Behavior</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>File not found / can't open</td>
+              <td>Throws <code>std::runtime_error</code> with a suggestion (check path, permissions, working directory).</td>
+            </tr>
+            <tr>
+              <td>Blank line in <code>.jsonl</code></td>
+              <td>Stored as <code>null</code> — keeps <code>records[i]</code> aligned with line <code>i</code>.</td>
+            </tr>
+            <tr>
+              <td>Malformed line</td>
+              <td>Warning printed with the line number, record stored as <code>null</code> (same alignment reasoning).</td>
+            </tr>
+            <tr>
+              <td>Missing field / bad index in <code>lookup()</code></td>
+              <td>Returns <code>LookupResult{ok: false, error: "..."}</code> instead of crashing.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="query-language">
+        <h2>Query Language</h2>
+        <p class="muted">The initial set of operations supported on JSON/JSONL data, with examples.</p>
+
+        <div class="feature">
+          <h3>Get</h3>
+          <p>Retrieve the value at a given path in a JSON object.</p>
+          <dl>
+            <dt>Query</dt><dd><code>.a</code></dd>
+            <dt>JSON</dt><dd><code>{"a": 1, "b": 2}</code></dd>
+            <dt>Result</dt><dd><code>1</code></dd>
+          </dl>
+        </div>
+
+        <div class="feature">
+          <h3>Filter &amp; Comparison</h3>
+          <p>Keep only the records matching a comparison.</p>
+          <dl>
+            <dt>Query</dt><dd><code>FILTER(.a &gt; 1)</code></dd>
+            <dt>JSON</dt><dd><code>[{"a": 1, "b": 2}, {"a": 2, "b": 2}]</code></dd>
+            <dt>Result</dt><dd><code>[{"a": 2, "b": 2}]</code></dd>
+          </dl>
+        </div>
+
+        <div class="feature">
+          <h3>Sort</h3>
+          <p>Order an array of records by a field, ascending or descending.</p>
+          <dl>
+            <dt>Query</dt><dd><code>SORT(a, "asc")</code></dd>
+            <dt>JSON</dt><dd><code>[{"a": 1, "b": 2}, {"a": 0, "b": 3}]</code></dd>
+            <dt>Result</dt><dd><code>[{"a": 0, "b": 3}, {"a": 1, "b": 2}]</code></dd>
+          </dl>
+        </div>
+
+        <div class="feature">
+          <h3>Limit</h3>
+          <p>Return only the first N records.</p>
+          <dl>
+            <dt>Query</dt><dd><code>LIMIT(1)</code></dd>
+            <dt>JSON</dt><dd><code>[{"a": 1, "b": 2}, {"a": 0, "b": 3}]</code></dd>
+            <dt>Result</dt><dd><code>{"a": 1, "b": 2}</code></dd>
+          </dl>
+        </div>
+
+        <div class="feature">
+          <h3>GroupBy</h3>
+          <p>Bucket records by the value of a field.</p>
+          <dl>
+            <dt>Query</dt><dd><code>GROUPBY(.a)</code></dd>
+            <dt>JSON</dt><dd><code>[{"a": 1, "b": 2}, {"a": 0, "b": 3}, {"a": 1, "b": 5}]</code></dd>
+            <dt>Result</dt><dd><code>{"0": [{"a": 0, "b": 3}], "1": [{"a": 1, "b": 2}, {"a": 1, "b": 5}]}</code></dd>
+          </dl>
+        </div>
+
+        <div class="feature">
+          <h3>Average</h3>
+          <p>Compute the mean of a field, optionally after grouping.</p>
+          <dl>
+            <dt>Query</dt><dd><code>GROUPBY(.city) | AVERAGE(.price)</code></dd>
+            <dt>JSON</dt><dd><code>[{"id":1,"city":"Riverside","price":450000}, {"id":2,"city":"Riverside","price":480000}, {"id":3,"city":"Los Angeles","price":800000}, {"id":4,"city":"Riverside","price":460000}]</code></dd>
+            <dt>Result</dt><dd><code>{"Riverside": 463333.33, "Los Angeles": 800000}</code></dd>
+          </dl>
+        </div>
+      </section>
+
+      <section id="algorithms">
+        <h2>Algorithms &amp; Optimizations</h2>
+        <div class="callout">
+          <strong>Planned, not yet implemented:</strong> keep memory usage low by
+          streaming <code>.jsonl</code> files line-by-line rather than loading the
+          whole file into memory at once. This section will grow as Sprint 1
+          lands and we have real performance decisions to document.
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      Sprint 1 &middot; <a href="https://github.com/UCR-CS-179K-Summer-2026/project1">UCR-CS-179K-Summer-2026/project1</a>
+    </footer>
   </body>
 </html>
