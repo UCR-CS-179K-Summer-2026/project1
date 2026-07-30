@@ -17,7 +17,7 @@ int main() {
 
     auto records = readJsonlFile(path);
     for (const auto& record : records) {
-        LookupResult result = lookup(*record, query);
+        LookupResult result = lookup(record, query);
         std::cout << formatResult(result) << "\n";
     }
 

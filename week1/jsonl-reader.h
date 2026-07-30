@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+using namespace std;
+
 // Reads a .jsonl file (one JSON object per line) and returns the parsed
 // records, in order, as an owned tree per line (JSONValue is move-only).
 //
@@ -12,7 +14,7 @@
 // - A line that fails to parse prints a warning (with line number) and is
 //   also stored as a JSONNull.
 // Both cases keep records[i] aligned with line i in the file.
-std::vector<JSONValuePtr> readJsonlFile(const std::string& path);
+vector<JSONValue> readJsonlFile(const std::string& path);
 
 // Result of looking up a path like ".student.name" or ".scores[0]" inside
 // a JSONValue tree. Exactly one of {value, error} is meaningful, based on

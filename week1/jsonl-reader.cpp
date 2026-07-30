@@ -5,7 +5,7 @@
 #include <sstream>
 #include <stdexcept>
 
-std::vector<JSONValuePtr> readJsonlFile(const std::string& path) {
+std::vector<JSONValue> readJsonlFile(const std::string& path) {
     std::ifstream file(path);
     if (!file.is_open()) {
         throw std::runtime_error(
@@ -15,7 +15,7 @@ std::vector<JSONValuePtr> readJsonlFile(const std::string& path) {
             "if you're not sure).");
     }
 
-    std::vector<JSONValuePtr> records;
+    std::vector<JSONValue> records;
     std::string line;
     int lineNumber = 0;
 
@@ -25,7 +25,7 @@ std::vector<JSONValuePtr> readJsonlFile(const std::string& path) {
         // Blank line (or whitespace-only): store null rather than skipping,
         // so records[i] always corresponds to line i in the file.
         if (line.find_first_not_of(" \t\r\n") == std::string::npos) {
-            records.push_back(std::make_unique<JSONNull>());
+            records.push_back(JSONValue(nullptr));
             continue;
         }
 
@@ -41,7 +41,7 @@ std::vector<JSONValuePtr> readJsonlFile(const std::string& path) {
             std::cerr << "Warning: line " << lineNumber
                       << ": failed to parse (" << e.what() << "), "
                       << "storing as null.\n";
-            records.push_back(std::make_unique<JSONNull>());
+            records.push_back(JSONValue(nullptr));
         }
     }
 
@@ -59,32 +59,32 @@ std::string formatValue(const JSONValue& value) {
         case ValueType::Null:
             return "null";
         case ValueType::Boolean:
-            return static_cast<const JSONBoolean&>(value).value() ? "true" : "false";
+            return std::get<bool>(value.getValue()) ? "true" : "false";
         case ValueType::Number: {
             std::ostringstream out;
-            out << static_cast<const JSONNumber&>(value).value();
+            out << std::get<double>(value.getValue());
             return out.str();
         }
         case ValueType::String:
-            return "\"" + static_cast<const JSONString&>(value).value() + "\"";
+            return "\"" + std::get<string>(value.getValue()) + "\"";
         case ValueType::Object: {
-            const auto& obj = static_cast<const JSONObject&>(value).entries();
+            const auto& obj = std::get<ObjectValue>(value.getValue());
             std::ostringstream out;
             out << "{";
             for (size_t i = 0; i < obj.size(); ++i) {
                 if (i > 0) out << ",";
-                out << "\"" << obj[i].first << "\":" << formatValue(*obj[i].second);
+                out << "\"" << obj[i].first << "\":" << formatValue(obj[i].second);
             }
             out << "}";
             return out.str();
         }
         case ValueType::Array: {
-            const auto& arr = static_cast<const JSONArray&>(value).items();
+            const auto& arr = std::get<ArrayValue>(value.getValue());
             std::ostringstream out;
             out << "[";
             for (size_t i = 0; i < arr.size(); ++i) {
                 if (i > 0) out << ",";
-                out << formatValue(*arr[i]);
+                out << formatValue(arr[i]);
             }
             out << "]";
             return out.str();
@@ -106,15 +106,15 @@ LookupResult lookup(const JSONValue& value, const std::string& path) {
             while (i < path.size() && path[i] != '.' && path[i] != '[') ++i;
             std::string field = path.substr(start, i - start);
 
-            if (!current->isObject()) {
+            if (current->getType() != ValueType::Object) {
                 return error("expected an object to look up field '" + field + "'");
             }
-            const auto& obj = static_cast<const JSONObject&>(*current).entries();
+            const auto& obj = std::get<ObjectValue>(current->getValue());
 
             const JSONValue* found = nullptr;
             for (const auto& entry : obj) {
                 if (entry.first == field) {
-                    found = entry.second.get();
+                    found = &entry.second;
                     break;
                 }
             }
@@ -140,15 +140,15 @@ LookupResult lookup(const JSONValue& value, const std::string& path) {
                 return error("invalid array index '" + indexStr + "'");
             }
 
-            if (!current->isArray()) {
+            if (current->getType() != ValueType::Array) {
                 return error("expected an array to index with [" + indexStr + "]");
             }
-            const auto& arr = static_cast<const JSONArray&>(*current).items();
+            const auto& arr = std::get<ArrayValue>(current->getValue());
 
             if (index < 0 || static_cast<size_t>(index) >= arr.size()) {
                 return error("index " + indexStr + " out of range");
             }
-            current = arr[static_cast<size_t>(index)].get();
+            current = &arr[static_cast<size_t>(index)];
 
         } else {
             return error("invalid path syntax at position " + std::to_string(i));
