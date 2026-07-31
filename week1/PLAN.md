@@ -1,10 +1,5 @@
 # Sprint 1 Plan
 
-See the [root README](../README.md) for the project summary, team list, and
-feature overview. This file tracks Sprint 1's tasks and who owns what.
-
----
-
 ## Lab Session Check-In (Monday, July 27)
 
 **What option did you choose?**
@@ -29,8 +24,6 @@ We will only use C++
 
 ### Person 1 (Jules) — JSON parser and data model
 
-Own the actual conversion from JSON text into an internal C++ structure.
-
 **Responsibilities**
 
 - Define a `JsonValue` type supporting:
@@ -51,11 +44,7 @@ Own the actual conversion from JSON text into an internal C++ structure.
         R"({"student":{"name":"Ryan","scores":[90,85]}})"
     );
 
-This is probably the most technically involved Sprint 1 assignment.
-
 ### Person 2 (Javier) — JSONL reader and lookup engine
-
-Own everything that happens after one JSON object can be parsed.
 
 **Responsibilities**
 
@@ -77,11 +66,7 @@ Own everything that happens after one JSON object can be parsed.
     Query: .student.name
     Result: "Ryan"
 
-This gives you the beginning of the query engine without prematurely building the full Sprint 2 language.
-
 ### Person 3 (Ryan) — CLI, testing, and integration
-
-Own the executable that connects everyone's work and proves it works.
 
 **Responsibilities**
 
@@ -120,3 +105,24 @@ Own the executable that connects everyone's work and proves it works.
     - Example:
         - Query: .student.name
         - Result: "Ryan"
+
+## Lab Session Check-In (Wednesday, July 29th)
+
+**What we had done before coming into lab:**
+
+- Sample parser from Jules that was untested
+- Skeleton code for parser reader and lookup that wasn't tested and only accounted for edge cases
+
+**What needs to be done by 4:00 PM**
+
+- Have a working demo to present about the project
+    - This includes a parser that can parse through a JSON file, find a field, and output it accordingly
+- Talk very briefly about the structure and overall plan of attack for this weekend to prepare for the demo on Monday during discussion
+
+**What's left to do after lab**
+
+- Clean up the parser to accept all types of JSON files and read in properly
+    - At the time of demo, we only tested a simple 3 line JSON file with our names and scores
+- Work on final README for the project and GitHub Pages Website for presentation on Monday
+- Clean up polymorphism structure more for the JSON reader
+- Get an actual tester and CLI functioning for demo
