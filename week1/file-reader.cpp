@@ -1,4 +1,4 @@
-#include "jsonl-reader.h"
+#include "file-reader.h"
 
 vector<JSONValue> readFile(const std::string& path) {
     ifstream file(path);
@@ -28,6 +28,8 @@ vector<JSONValue> readFile(const std::string& path) {
     }
 }
 
+/*NOTE: records[i] NO LONGER corresponds to line i in the file. lineNumber
+should solely be used for error reporting */
 std::vector<JSONValue> readJsonlFile(const std::string& contents) {
     std::vector<JSONValue> records;
     std::string line;
@@ -35,30 +37,20 @@ std::vector<JSONValue> readJsonlFile(const std::string& contents) {
 
     istringstream stream(contents);
 
-    while (getline(stream, line)) {
-        ++lineNumber;
+    try {
+        while (getline(stream, line)) {
+            ++lineNumber;
 
-        // Blank line (or whitespace-only): store null rather than skipping,
-        // so records[i] always corresponds to line i in the file.
-        if (line.find_first_not_of(" \t\r\n") == std::string::npos) {
-            records.push_back(JSONValue(nullptr));
-            continue;
-        }
+            if (line.find_first_not_of(" \t\r\n") == std::string::npos) {
+                continue;
+            }
 
-        // Parser copies string data into each JSONValue node's own
-        // std::string as it builds the tree, so the tree doesn't depend on
-        // `line` surviving past this iteration (unlike the old string_view
-        // design, this needs no extra buffer bookkeeping).
-        Parser parser(line);
-
-        try {
+            Parser parser(line, ParserType::JSONL);
             records.push_back(parser.parse());
-        } catch (const std::exception& e) {
-            std::cerr << "Warning: line " << lineNumber
-                      << ": failed to parse (" << e.what() << "), "
-                      << "storing as null.\n";
-            records.push_back(JSONValue(nullptr));
         }
+    } catch (const exception& e) {
+        std::cerr << "Warning: failed to parse (" << e.what() << " at line " << lineNumber << ")\n";
+        return {};
     }
 
     return records;
@@ -66,14 +58,17 @@ std::vector<JSONValue> readJsonlFile(const std::string& contents) {
 
 vector<JSONValue> readJsonFile(const string& contents) {
     vector<JSONValue> records;
-    Parser parser(contents);
+    Parser parser(contents, ParserType::JSON);
 
     try {
-        records.push_back(parser.parse());
+        JSONValue doc = parser.parse();
+        if (doc.getType() == ValueType::Array) {
+            records = get<ArrayValue>(doc.getValue());
+        } else {
+            records.push_back(move(doc));
+        }
     } catch (const exception& e) {
-        cerr << "Warning: failed to parse JSON file (" << e.what() << "), "
-                  << "storing as null.\n";
-        records.push_back(JSONValue(nullptr));
+        cerr << "Warning: failed to parse JSON file (" << e.what() << "), ";
     }
 
     return records;

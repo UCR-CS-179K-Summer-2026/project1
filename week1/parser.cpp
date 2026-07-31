@@ -8,13 +8,21 @@ JSONValue Parser::parse() {
 
             while(currToken.type != TokenType::RBrace) {
                 if(currToken.type != TokenType::String) {
-                    throw runtime_error("Expected string key in object");
+                    if(fileType == ParserType::JSON) {
+                        throw runtime_error("Warning: line " + to_string(scanner.getLineNumber()) + " failed to parse");
+                    } else {
+                        throw runtime_error("Expected string key in object");
+                    }
                 }
                 string key(currToken.value);
                 currToken = scanner.scan();
 
                 if(currToken.type != TokenType::Colon) {
-                    throw runtime_error("Expected colon after key in object");
+                    if(fileType == ParserType::JSON) {
+                        throw runtime_error("Warning: line " + to_string(scanner.getLineNumber()) + " failed to parse");
+                    } else {
+                        throw runtime_error("Expected colon after key in object");
+                    }
                 }
                 currToken = scanner.scan();
 
@@ -24,7 +32,11 @@ JSONValue Parser::parse() {
                 if(currToken.type == TokenType::Comma) {
                     currToken = scanner.scan();
                 } else if(currToken.type != TokenType::RBrace) {
-                    throw runtime_error("Expected comma or closing brace in object");
+                    if(fileType == ParserType::JSON) {
+                        throw runtime_error("Warning: line " + to_string(scanner.getLineNumber()) + " failed to parse");
+                    } else {
+                        throw runtime_error("Expected comma or closing brace in object");
+                    }
                 }
             }
             currToken = scanner.scan();
@@ -41,7 +53,11 @@ JSONValue Parser::parse() {
                 if(currToken.type == TokenType::Comma) {
                     currToken = scanner.scan();
                 } else if(currToken.type != TokenType::RBracket) {
-                    throw runtime_error("Expected comma or closing bracket in array");
+                    if(fileType == ParserType::JSON) {
+                        throw runtime_error("Warning: line " + to_string(scanner.getLineNumber()) + " failed to parse");
+                    } else {
+                        throw runtime_error("Expected comma or closing bracket in array");
+                    }
                 }
             }
             currToken = scanner.scan();

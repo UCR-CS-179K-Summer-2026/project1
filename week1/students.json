@@ -1,4 +1,4 @@
 {"student": [{"name":"Ryan","scores":[90,85]},
 {"name":"Javier","scores":[95,88]},
-{"name":"Jules","scores":[92,91]},
+{name:"Jules","scores":[92,91]},
 {"name": "Nobody"}]}

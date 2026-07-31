@@ -2,6 +2,10 @@
 
 Token Scanner::scan() {
     while(curr < end && (*curr == ' ' || *curr == '\n' || *curr == '\t' || *curr == '\r')) {
+        if(*curr == '\n') {
+            ++currLine;
+        }
+
         ++curr;
     }
 
@@ -86,5 +90,9 @@ Token Scanner::scan() {
         }
     }
 
-    throw runtime_error("Invalid JSON input");
+    if(fileType == ParserType::JSON) {
+        throw runtime_error("Invalid JSON input at line " + to_string(currLine));
+    } else {
+        throw runtime_error("Invalid JSONL input");
+    }
 }

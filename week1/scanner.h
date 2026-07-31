@@ -9,6 +9,7 @@
 using namespace std;
 
 enum class TokenType : uint8_t {Boolean, Colon, Comma, End, LBrace, LBracket, Null, Number, RBrace, RBracket, String};
+enum class ParserType {JSONL, JSON};
 
 struct Token {
     TokenType type;
@@ -21,9 +22,12 @@ class Scanner {
     private:
     const char* curr;
     const char* end;
+    int currLine = 1;
+    ParserType fileType;
 
     public:
-    Scanner(string_view json) : curr(json.data()), end(json.data() + json.size()) {}
-
+    Scanner(string_view json, ParserType type) : curr(json.data()), end(json.data() + json.size()), fileType(type) {}
+    
+    int getLineNumber() const { return currLine; }
     Token scan();
 };
