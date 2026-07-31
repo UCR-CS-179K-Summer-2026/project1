@@ -1,25 +1,41 @@
 #include "jsonl-reader.h"
 
-#include <fstream>
-#include <iostream>
-#include <sstream>
-#include <stdexcept>
-
-std::vector<JSONValue> readJsonlFile(const std::string& path) {
-    std::ifstream file(path);
+vector<JSONValue> readFile(const std::string& path) {
+    ifstream file(path);
     if (!file.is_open()) {
-        throw std::runtime_error(
+        throw runtime_error(
             "Could not open '" + path + "'. Check that the path is spelled "
             "correctly, that the file exists, and that you're running the "
             "program from the directory you expect (try an absolute path "
             "if you're not sure).");
     }
 
+    filesystem::path filepath(path);
+    string extension = filepath.extension().string();
+
+    transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) {
+        return tolower(c);
+    });
+
+    ostringstream buffer;
+    buffer << file.rdbuf();
+    string contents = buffer.str();
+
+    if(extension == ".jsonl") {
+        return readJsonlFile(contents);
+    } else {
+        return readJsonFile(contents);
+    }
+}
+
+std::vector<JSONValue> readJsonlFile(const std::string& contents) {
     std::vector<JSONValue> records;
     std::string line;
     int lineNumber = 0;
 
-    while (std::getline(file, line)) {
+    istringstream stream(contents);
+
+    while (getline(stream, line)) {
         ++lineNumber;
 
         // Blank line (or whitespace-only): store null rather than skipping,
@@ -43,6 +59,21 @@ std::vector<JSONValue> readJsonlFile(const std::string& path) {
                       << "storing as null.\n";
             records.push_back(JSONValue(nullptr));
         }
+    }
+
+    return records;
+}
+
+vector<JSONValue> readJsonFile(const string& contents) {
+    vector<JSONValue> records;
+    Parser parser(contents);
+
+    try {
+        records.push_back(parser.parse());
+    } catch (const exception& e) {
+        cerr << "Warning: failed to parse JSON file (" << e.what() << "), "
+                  << "storing as null.\n";
+        records.push_back(JSONValue(nullptr));
     }
 
     return records;

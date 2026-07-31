@@ -77,7 +77,7 @@ Token Scanner::scan() {
             curr++;
         }
 
-        regex pattern(R"(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)");
+        static const regex pattern(R"(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)");
         string str(numberBegin, curr - numberBegin);
 
         if(regex_match(str, pattern)) {

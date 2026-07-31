@@ -11,11 +11,11 @@
 
 int main() {
     std::string path = "students.jsonl";
-    std::string query = ".student.name";
+    std::string query = ".student.scores";
 
     std::cout << "Reading " << path << ", query: " << query << "\n\n";
 
-    auto records = readJsonlFile(path);
+    auto records = readFile(path);
     for (const auto& record : records) {
         LookupResult result = lookup(record, query);
         std::cout << formatResult(result) << "\n";
