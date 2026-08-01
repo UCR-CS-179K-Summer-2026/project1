@@ -2,22 +2,22 @@
 // file, run a lookup query against every record, print the results.
 //
 // Build:
-//   g++ -std=c++17 -Wall -Wextra scanner.cpp parser.cpp jsonl-reader.cpp demo.cpp -o demo
+//   g++ -std=c++17 -Wall -Wextra scanner.cpp parser.cpp file-reader.cpp demo.cpp -o demo
 // Run:
 //   ./demo
 #include <iostream>
 
-#include "jsonl-reader.h"
+#include "file-reader.h"
 
 int main() {
-    std::string path = "students.jsonl";
-    std::string query = ".student.name";
+    std::string path = "students.json";
+    std::string query = ".student[4].scores";
 
     std::cout << "Reading " << path << ", query: " << query << "\n\n";
 
-    auto records = readJsonlFile(path);
+    auto records = readFile(path);
     for (const auto& record : records) {
-        LookupResult result = lookup(*record, query);
+        LookupResult result = lookup(record, query);
         std::cout << formatResult(result) << "\n";
     }
 
