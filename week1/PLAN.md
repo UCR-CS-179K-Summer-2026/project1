@@ -126,3 +126,4 @@ We will only use C++
 - Work on final README for the project and GitHub Pages Website for presentation on Monday
 - Clean up polymorphism structure more for the JSON reader
 - Get an actual tester and CLI functioning for demo
+- Everyone has the same roles as Monday, just working on the final tweaks for Monday demo
