@@ -1,32 +1,35 @@
 #pragma once
 
+#include "parser.h"
+
 #include <string>
 #include <vector>
 
-#include "json_value.h"
-
 // Reads a .jsonl file (one JSON object per line) and returns the parsed
-// records, in order.
+// records, in order, as an owned tree per line (JSONValue is move-only).
 //
-// TODO: decide + document what happens on:
-//   - a blank line (skip it? error?)
-//   - a line that fails to parse (skip + warn? abort the whole read?)
-std::vector<JsonValue> readJsonlFile(const std::string& path);
+// - A blank/whitespace-only line is stored as a JSONNull.
+// - A line that fails to parse prints a warning (with line number) and is
+//   also stored as a JSONNull.
+// Both cases keep records[i] aligned with line i in the file.
+std::vector<JSONValuePtr> readJsonlFile(const std::string& path);
 
 // Result of looking up a path like ".student.name" or ".scores[0]" inside
-// a JsonValue. Exactly one of {value, error} is meaningful, based on ok.
+// a JSONValue tree. Exactly one of {value, error} is meaningful, based on
+// ok. `value` is a non-owning pointer into the tree passed to lookup() —
+// it's only valid for as long as that tree is alive.
 struct LookupResult {
     bool ok;
-    JsonValue value;    // valid when ok == true
-    std::string error;  // valid when ok == false, e.g. "field 'name' not found"
+    const JSONValue* value;  // valid when ok == true
+    std::string error;       // valid when ok == false, e.g. "field 'name' not found"
 };
 
-// Looks up a dotted/bracketed path inside a JsonValue.
+// Looks up a dotted/bracketed path inside a JSONValue tree.
 // Supported path syntax (see PLAN.md JSON Examples):
 //   .name
 //   .student.name
 //   .scores[0]
-LookupResult lookup(const JsonValue& value, const std::string& path);
+LookupResult lookup(const JSONValue& value, const std::string& path);
 
 // Formats a LookupResult the way it should appear on the terminal,
 // e.g. strings get quotes, numbers don't, errors are readable.
