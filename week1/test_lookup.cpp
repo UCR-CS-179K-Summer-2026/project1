@@ -9,7 +9,7 @@
 
 int main() {
     Parser parser(R"({"student":{"name":"Ryan","scores":[90,85]}})");
-    JSONValuePtr root = parser.parse();
+    JSONValue root = parser.parse();
 
     struct Case { std::string path; };
     std::vector<Case> cases = {
@@ -20,7 +20,7 @@ int main() {
     };
 
     for (const auto& c : cases) {
-        LookupResult result = lookup(*root, c.path);
+        LookupResult result = lookup(root, c.path);
         std::cout << c.path << " -> " << formatResult(result) << "\n";
     }
 

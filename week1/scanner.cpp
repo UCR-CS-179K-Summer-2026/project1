@@ -2,6 +2,10 @@
 
 Token Scanner::scan() {
     while(curr < end && (*curr == ' ' || *curr == '\n' || *curr == '\t' || *curr == '\r')) {
+        if(*curr == '\n') {
+            ++currLine;
+        }
+
         ++curr;
     }
 
@@ -77,7 +81,7 @@ Token Scanner::scan() {
             curr++;
         }
 
-        regex pattern(R"(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)");
+        static const regex pattern(R"(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)");
         string str(numberBegin, curr - numberBegin);
 
         if(regex_match(str, pattern)) {
@@ -86,5 +90,9 @@ Token Scanner::scan() {
         }
     }
 
-    throw runtime_error("Invalid JSON input");
+    if(fileType == ParserType::JSON) {
+        throw runtime_error("Invalid JSON input at line " + to_string(currLine));
+    } else {
+        throw runtime_error("Invalid JSONL input");
+    }
 }
