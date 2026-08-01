@@ -84,7 +84,13 @@
         padding: 2.5rem 1.5rem 4rem;
       }
 
-      section { margin-bottom: 3rem; }
+      section { 
+        margin-bottom: 3rem; 
+        position: relative;
+        display: flex;
+        flex-flow: column nowrap;
+      }
+
       section h2 {
         font-size: 1.4rem;
         border-bottom: 1px solid var(--border);
@@ -116,8 +122,9 @@
       .pipeline {
         display: flex;
         align-items: stretch;
+        align-self: center;
         gap: 0.5rem;
-        overflow-x: auto;
+        overflow-x: visible;
         padding: 1rem 0;
       }
       .pipeline .stage {
@@ -296,7 +303,7 @@
     <nav>
       <a href="#architecture">Architecture</a>
       <a href="#roles">Team &amp; Roles</a>
-      <a href="#classes">Classes &amp; Polymorphism</a>
+      <a href="#classes">Classes &amp; Data Model</a>
       <a href="#interfaces">Module Interfaces</a>
       <a href="#edge-cases">Edge Cases</a>
       <a href="#query-language">Query Language</a>
@@ -308,10 +315,11 @@
         <h2>System Architecture</h2>
         <p>
           Sprint 1 is a four-stage pipeline: a <strong>Scanner</strong> tokenizes raw text,
-          a <strong>Parser</strong> consumes tokens and builds a tree of polymorphic
-          <code>JSONValue</code> nodes, a <strong>JSONL reader</strong> drives the parser
-          one line at a time and answers path queries against the resulting tree, and a
-          thin <strong>driver</strong> (<code>demo.cpp</code>) wires it together for the CLI.
+          a <strong>Parser</strong> consumes tokens and builds a tree of <code>JSONValue</code>
+          nodes (each one a tagged <code>std::variant</code>), a <strong>file reader</strong>
+          drives the parser over a <code>.json</code> or <code>.jsonl</code> file and answers
+          path queries against the resulting tree, and a thin <strong>driver</strong>
+          (<code>demo.cpp</code>) wires it together for the CLI.
         </p>
 
         <div class="pipeline">
@@ -330,17 +338,17 @@
             <h4>Parser &amp; data model</h4>
             <ul>
               <li><code>parser.h</code> / <code>parser.cpp</code></li>
-              <li><code>value.cpp</code> — <code>JSONValue</code> hierarchy</li>
+              <li><code>value.cpp</code> — <code>JSONValue</code> (variant)</li>
               <li><code>Parser::parse()</code></li>
             </ul>
           </div>
           <div class="arrow">&#8594;</div>
           <div class="stage">
             <div class="owner">Javier</div>
-            <h4>JSONL reader &amp; lookup engine</h4>
+            <h4>File reader &amp; lookup engine</h4>
             <ul>
-              <li><code>jsonl-reader.h</code> / <code>.cpp</code></li>
-              <li><code>readJsonlFile()</code></li>
+              <li><code>file-reader.h</code> / <code>.cpp</code></li>
+              <li><code>readFile()</code> — dispatches on extension</li>
               <li><code>lookup()</code>, <code>formatResult()</code></li>
             </ul>
           </div>
@@ -357,12 +365,13 @@
         </div>
 
         <p class="muted">
-          A <code>.jsonl</code> file flows in on the left: <code>readJsonlFile()</code> reads
-          it one line at a time, hands each line to a fresh <code>Parser</code>, and the
-          parser pulls tokens from a <code>Scanner</code> lazily as it recurses through the
-          grammar. Each line becomes an owned <code>JSONValuePtr</code> tree; <code>lookup()</code>
-          then walks that tree to answer a path query, and <code>formatResult()</code> turns
-          the answer (or an error) into printable text.
+          A file flows in on the left: <code>readFile()</code> checks the extension and
+          dispatches to <code>readJsonlFile()</code> (one <code>Parser</code> per line) or
+          <code>readJsonFile()</code> (a single <code>Parser</code> over the whole document,
+          splatting a top-level array into one record per element). Each record is an owned
+          <code>JSONValue</code> tree; <code>lookup()</code> then walks that tree to answer a
+          path query, and <code>formatResult()</code> turns the answer (or an error) into
+          printable text.
         </p>
       </section>
 
@@ -374,16 +383,17 @@
             <div class="owner">Jules</div>
             <h4>JSON parser &amp; data model</h4>
             <ul>
-              <li>Defined the polymorphic <code>JSONValue</code> type (null, bool, number, string, object, array)</li>
+              <li>Defined the <code>JSONValue</code> type (null, bool, number, string, object, array)</li>
               <li>Built the <code>Scanner</code> tokenizer and recursive-descent <code>Parser</code></li>
               <li>Handles whitespace, escapes, nesting, and malformed-input errors</li>
+              <li>Added support for JSON extensions in <code>readJsonFile()</code></li>
             </ul>
           </div>
           <div class="card">
             <div class="owner">Javier</div>
-            <h4>JSONL reader &amp; lookup engine</h4>
+            <h4>File reader &amp; lookup engine</h4>
             <ul>
-              <li>Reads a <code>.jsonl</code> file line by line and drives Jules's parser</li>
+              <li>Reads a <code>.json</code> or <code>.jsonl</code> file and drives Jules's parser</li>
               <li>Implements dotted/bracketed path lookup (<code>.student.name</code>, <code>.scores[0]</code>)</li>
               <li>Decides behavior for blank lines, malformed lines, missing fields, bad indices</li>
               <li>Formats results (and errors) for terminal output</li>
@@ -402,55 +412,34 @@
       </section>
 
       <section id="classes">
-        <h2>Classes &amp; Polymorphism</h2>
+        <h2>Classes &amp; Data Model</h2>
         <p>
-          <code>JSONValue</code> is an abstract base class with one pure-virtual method,
-          <code>getType()</code>. Six concrete subclasses each represent exactly one JSON
-          type and store only the data that type needs — no unused fields, no tagged union.
-          The parser never knows which concrete type it's building next; it just returns a
-          <code>JSONValuePtr</code> (a <code>unique_ptr&lt;JSONValue&gt;</code>), and every
-          caller downstream — <code>lookup()</code>, <code>formatValue()</code> — works
-          through the base-class interface and dispatches to the right subclass at runtime
-          via virtual calls (<code>getType()</code>) or a checked <code>static_cast</code>
-          once the type is known.
+          <code>JSONValue</code> is a single concrete class wrapping a tagged
+          <code>std::variant&lt;ArrayValue, bool, nullptr_t, double, ObjectValue, string&gt;</code>.
+          <code>getType()</code> derives the
+          <code>ValueType</code> straight from <code>variant::index()</code> (the enum's
+          declaration order is kept in sync with the variant's alternative order), and every
+          caller downstream — <code>lookup()</code>, <code>formatValue()</code> — reads the
+          payload with <code>std::get&lt;T&gt;(value.getValue())</code> once the type is known.
         </p>
 
         <div class="hierarchy">
-          <div class="base">JSONValue &nbsp;(abstract)<br><span class="muted" style="font-size:0.75rem">virtual ~JSONValue(); virtual ValueType getType() const = 0;</span></div>
-          <div class="connector">&#9650;&#9650;&#9650;&#9650;&#9650;&#9650;</div>
+          <div class="base">JSONValue<br><span class="muted" style="font-size:0.75rem">variant&lt;ArrayValue, bool, nullptr_t, double, ObjectValue, string&gt; value;</span></div>
+          <div class="connector">&#9660;</div>
           <div class="leaves">
-            <div class="leaf">JSONNull<small>no payload</small></div>
-            <div class="leaf">JSONBoolean<small>bool value_</small></div>
-            <div class="leaf">JSONNumber<small>double value_</small></div>
-            <div class="leaf">JSONString<small>string value_</small></div>
-            <div class="leaf">JSONArray<small>vector&lt;JSONValuePtr&gt; items_</small></div>
-            <div class="leaf">JSONObject<small>vector&lt;pair&lt;string, JSONValuePtr&gt;&gt; entries_</small></div>
+            <div class="leaf">ArrayValue<small>vector&lt;JSONValue&gt;</small></div>
+            <div class="leaf">bool<small>Boolean</small></div>
+            <div class="leaf">nullptr_t<small>Null</small></div>
+            <div class="leaf">double<small>Number</small></div>
+            <div class="leaf">ObjectValue<small>vector&lt;pair&lt;string, JSONValue&gt;&gt;</small></div>
+            <div class="leaf">string<small>String</small></div>
           </div>
         </div>
 
-        <p class="muted">
-          Ownership is move-only: a <code>JSONValue</code> tree can't be copied, only moved,
-          which is why the parser builds it with <code>make_unique&lt;...&gt;</code> and
-          <code>std::move</code> at every step. Code that needs to look inside a tree it
-          doesn't own (like <code>lookup()</code>) takes a
-          <code>const JSONValue&amp;</code>/<code>const JSONValue*</code> instead of copying it.
-          <code>JSONObject</code> stores its entries as a <code>vector&lt;pair&lt;...&gt;&gt;</code>
-          rather than a <code>map</code>, which keeps insertion order and avoids the log-time
-          lookup overhead of a tree-based map for the typically-small objects this format has —
-          <code>lookup()</code> does a linear scan by key.
-        </p>
-
         <div class="callout">
-          <strong>Alternative considered:</strong> the repo's history shows an earlier pass
-          that replaced this hierarchy with <code>std::variant</code> (a tagged union) and
-          then reverted back to polymorphism. A <code>variant</code> avoids heap allocation
-          per node and needs no virtual dispatch, but every consumer has to
-          <code>std::visit</code> or <code>std::get</code> against all six alternatives by
-          hand, and the object/array cases still need <code>vector</code>/heap storage
-          internally anyway. Polymorphism keeps each type's logic (formatting, type checks)
-          local to its own class and makes adding a new JSON extension type a one-class
-          change instead of touching every <code>visit</code> call site — worth
-          re-evaluating in a later sprint once real performance numbers exist.
+          <strong>Note:</strong> Worth analyzing from a time cost perspective whether 
+          <code>JSONValue</code> should be implemented using <code>std::variant</code> or 
+          using polymorphism.
         </div>
       </section>
 
@@ -458,44 +447,57 @@
         <h2>Module Interfaces</h2>
 
         <h3>Scanner (Jules)</h3>
-        <p class="muted">Turns raw text into one <code>Token</code> at a time, on demand, rather than tokenizing the whole input up front.</p>
+        <p class="muted">Turns raw text into one <code>Token</code> at a time, on demand, rather than tokenizing the whole input up front. Tracks its own line number and knows whether it's scanning a <code>.json</code> or <code>.jsonl</code> buffer, so it can phrase errors accordingly.</p>
         <pre><code>enum class TokenType : uint8_t {
     Boolean, Colon, Comma, End, LBrace, LBracket,
     Null, Number, RBrace, RBracket, String
 };
+enum class ParserType { JSONL, JSON };
 
 struct Token {
     TokenType type;
     string_view value;  // view into the original buffer, no copy
+    Token(TokenType t, string_view v);
 };
 
 class Scanner {
 public:
-    Scanner(std::string_view json);
+    Scanner(string_view json, ParserType type);
+    int getLineNumber() const;
     Token scan();  // advances and returns the next token
 };</code></pre>
 
         <h3>Parser &amp; data model (Jules)</h3>
-        <p class="muted">Recursive-descent parser: one <code>parse()</code> call per JSON value, recursing for nested objects/arrays.</p>
+        <p class="muted">Recursive-descent parser: one <code>parse()</code> call per JSON value, recursing for nested objects/arrays. <code>JSONValue</code> is returned by value now — a tagged <code>variant</code>, not a heap-owned pointer.</p>
         <pre><code>enum class ValueType : uint8_t { Array, Boolean, Null, Number, Object, String };
+
+using ArrayValue = vector&lt;JSONValue&gt;;
+using ObjectValue = vector&lt;pair&lt;string, JSONValue&gt;&gt;;
 
 class JSONValue {
 public:
-    virtual ~JSONValue() = default;
-    virtual ValueType getType() const = 0;
-    bool isNull() const; bool isBool() const; bool isNumber() const;
-    bool isString() const; bool isObject() const; bool isArray() const;
+    explicit JSONValue(ArrayValue a);
+    explicit JSONValue(bool b);
+    explicit JSONValue(nullptr_t n);
+    explicit JSONValue(double d);
+    explicit JSONValue(ObjectValue o);
+    explicit JSONValue(string s);
+
+    ValueType getType() const;
+    const variant&lt;ArrayValue, bool, nullptr_t, double, ObjectValue, string&gt;&amp; getValue() const;
 };
-using JSONValuePtr = unique_ptr&lt;JSONValue&gt;;
 
 class Parser {
 public:
-    Parser(std::string_view json);
-    JSONValuePtr parse();
+    Parser(std::string_view json, ParserType type);
+    JSONValue parse();
 };</code></pre>
 
-        <h3>JSONL reader / lookup engine (Javier)</h3>
-        <pre><code>std::vector&lt;JSONValuePtr&gt; readJsonlFile(const std::string&amp; path);
+        <h3>File reader &amp; lookup engine (Javier)</h3>
+        <p class="muted"><code>readFile()</code> reads the whole file into memory, checks the extension, and dispatches to the right sub-reader.</p>
+        <pre><code>vector&lt;JSONValue&gt; readFile(const string&amp; path);          // dispatches on extension
+vector&lt;JSONValue&gt; readJsonlFile(const string&amp; contents);  // one Parser per line
+vector&lt;JSONValue&gt; readJsonFile(const string&amp; contents);   // one Parser for the whole doc
 
 struct LookupResult {
     bool ok;
@@ -507,13 +509,9 @@ LookupResult lookup(const JSONValue&amp; value, const std::string&amp; path);
 std::string formatResult(const LookupResult&amp; result);</code></pre>
 
         <h3>CLI / driver (Ryan)</h3>
-        <p class="muted">Sprint 1's driver is <code>demo.cpp</code>: reads a fixed file and query, prints one result per record. A general-purpose <code>./sluice students.jsonl ".student.name"</code> CLI (argv-driven filename + query) is the target for the CLI stage.</p>
+        <p class="muted">Sprint 1's driver is <code>demo.cpp</code>: reads a fixed file and query, prints one result per record. A general-purpose <code>./sluice students.json ".student.name"</code> CLI (argv-driven filename + query) is the target for the CLI stage.</p>
         <pre><code>./demo
-// Reading students.jsonl, query: .student.name
-//
-// "Ryan"
-// "Javier"
-// "Jules"</code></pre>
+// Reading students.json, query: .student[4].scores</code></pre>
       </section>
 
       <section id="edge-cases">
@@ -529,19 +527,23 @@ std::string formatResult(const LookupResult&amp; result);</code></pre>
             </tr>
             <tr>
               <td>Blank line in <code>.jsonl</code></td>
-              <td>Stored as <code>JSONNull</code> — keeps <code>records[i]</code> aligned with line <code>i</code>.</td>
+              <td>Skipped outright (no record pushed). <code>records[i]</code> no longer corresponds to line <code>i</code> — <code>lineNumber</code> is tracked solely for error messages.</td>
             </tr>
             <tr>
-              <td>Malformed line</td>
-              <td>Warning printed to <code>stderr</code> with the line number, record stored as <code>JSONNull</code> (same alignment reasoning), rest of the file keeps parsing.</td>
+              <td>Malformed line in <code>.jsonl</code></td>
+              <td>A single <code>try</code>/<code>catch</code> now wraps the whole read loop: on the first parse failure, a warning (with line number) is printed to <code>stderr</code> and <code>readJsonlFile()</code> returns an <strong>empty</strong> vector — the rest of the file is not parsed.</td>
+            </tr>
+            <tr>
+              <td>Malformed <code>.json</code> file</td>
+              <td><code>readJsonFile()</code> catches the parse exception, prints a warning to <code>stderr</code>, and returns an empty vector.</td>
             </tr>
             <tr>
               <td>Unterminated string / bad token in scanner</td>
-              <td><code>Scanner::scan()</code> throws <code>runtime_error</code> ("Unterminated string" / "Invalid JSON input"), caught per-line by <code>readJsonlFile()</code>.</td>
+              <td><code>Scanner::scan()</code> throws <code>runtime_error</code> — "Unterminated string" regardless of file type; otherwise "Invalid JSON input at line N" for <code>.json</code> or "Invalid JSONL input" for <code>.jsonl</code>, based on the <code>ParserType</code> it was constructed with.</td>
             </tr>
             <tr>
               <td>Wrong token where a key/colon/comma/brace was expected</td>
-              <td><code>Parser::parse()</code> throws a specific <code>runtime_error</code> ("Expected string key in object", etc.) instead of reading garbage.</td>
+              <td><code>Parser::parse()</code> throws a specific <code>runtime_error</code> ("Expected string key in object", etc.) for <code>.jsonl</code>, or a generic "Warning: line N failed to parse" for <code>.json</code>.</td>
             </tr>
             <tr>
               <td>Missing field / bad index in <code>lookup()</code></td>
@@ -549,7 +551,7 @@ std::string formatResult(const LookupResult&amp; result);</code></pre>
             </tr>
             <tr>
               <td>Indexing into a non-array, or field lookup on a non-object</td>
-              <td><code>lookup()</code> checks <code>isArray()</code>/<code>isObject()</code> first and returns a typed error instead of a bad <code>static_cast</code>.</td>
+              <td><code>lookup()</code> checks <code>getType() != ValueType::Array</code>/<code>Object</code> first and returns a typed error instead of a bad <code>std::get</code>.</td>
             </tr>
           </tbody>
         </table>
@@ -642,26 +644,37 @@ std::string formatResult(const LookupResult&amp; result);</code></pre>
         <p class="muted">
           <code>Token::value</code> is a <code>string_view</code> into the original buffer
           — scanning a string or number allocates nothing. A copy only happens once, when
-          the parser commits to building a <code>JSONString</code> (or an object key) and
-          needs an owned <code>std::string</code>.
+          the parser commits to building a string-valued <code>JSONValue</code> (or an
+          object key) and needs an owned <code>std::string</code>.
         </p>
 
-        <h3>Move-only tree, no deep copies</h3>
+        <h3>Value-typed tree, moved not copied</h3>
         <p class="muted">
-          The whole <code>JSONValue</code> tree is built and threaded through
-          <code>unique_ptr</code>s (<code>JSONValuePtr</code>). Sub-trees are
-          <code>std::move</code>d into their parent container as they're built, so no
-          node is ever copied.
+          <code>JSONValue</code> is a value type (a tagged <code>variant</code>), and
+          sub-trees live directly inside their parent's <code>vector</code>
+          (<code>ArrayValue</code>/<code>ObjectValue</code>). They're still
+          <code>std::move</code>d into place as they're built rather than copied, so
+          building the tree doesn't duplicate data — it just no longer requires a heap
+          allocation (<code>unique_ptr</code>) per node the way the earlier polymorphic
+          design did.
         </p>
 
-        <h3>Per-line streaming over the file</h3>
+        <h3>Per-line parsing, whole-file buffering</h3>
         <p class="muted">
-          <code>readJsonlFile()</code> reads with <code>std::getline</code> one line at a
-          time and parses each line independently, rather than loading the whole
-          <code>.jsonl</code> file into memory before parsing anything. Peak memory is
-          bounded by the largest single record, not the whole file — directly serving the
-          "least RAM possible" goal from the Sprint 1 plan.
+          <code>readFile()</code> now reads the entire file into an in-memory
+          <code>std::string</code> (<code>ostringstream buffer; buffer &lt;&lt; file.rdbuf();</code>)
+          before <code>readJsonlFile()</code>/<code>readJsonFile()</code> parse it —
+          <code>.jsonl</code> is still parsed one line at a time via a fresh
+          <code>Parser</code> per line, but that line comes out of the buffered string
+          rather than being streamed with <code>std::getline</code> straight off the file
+          handle.
         </p>
+
+        <div class="callout">
+          <strong>Not yet optimized:</strong> passing the buffer of the whole file to <code>readJsonlFile()</code> is 
+          inefficient for large files, but it was the simplest way to get a working prototype 
+          for Sprint 1.
+        </div>
 
         <div class="callout">
           <strong>Not yet optimized:</strong> <code>lookup()</code> does a linear scan over
