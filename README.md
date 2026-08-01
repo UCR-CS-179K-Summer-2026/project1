@@ -1,6 +1,6 @@
 # JSON/JSONL Parser
 
-## Summary
+## Purpose & Function
 
 This project is a command-line tool for parsing and querying JSON and JSONL
 (newline-delimited JSON) files. It's built with performance in mind — the
@@ -9,8 +9,7 @@ stays usable on large files and modest hardware.
 
 The tool supports a small query language for pulling data out of JSON
 records: getting a field, filtering, sorting, limiting, grouping, and
-aggregating. See [Major Features](#major-features) below for examples of
-each.
+aggregating with possibly more to come!
 
 Design details (system architecture, module interfaces, and algorithms) are
 documented on our [project design page](https://ucr-cs-179k-summer-2026.github.io/project1/).
@@ -68,8 +67,3 @@ C++
     Query: `GROUPBY(.city) | AVERAGE(.price)`
     JSON: `[{"id": 1, "city": "Riverside", "price": 450000}, {"id": 2, "city": "Riverside", "price": 480000}, {"id": 3, "city": "Los Angeles", "price": 800000}, {"id": 4, "city": "Riverside", "price": 460000}]`
     Result: `{"Riverside": 463333.33, "Los Angeles": 800000}`
-
-## Project Docs
-
-- [Sprint 1 plan and task assignments](week1/PLAN.md)
-- [Design docs (GitHub Pages)](https://ucr-cs-179k-summer-2026.github.io/project1/)
