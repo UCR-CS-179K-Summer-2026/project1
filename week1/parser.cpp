@@ -27,7 +27,7 @@ JSONValue Parser::parse() {
                 currToken = scanner.scan();
 
                 JSONValue value = parse();
-                object.emplace_back(std::move(key), std::move(value));
+                object.emplace_back(move(key), move(value));
 
                 if(currToken.type == TokenType::Comma) {
                     currToken = scanner.scan();
@@ -40,7 +40,7 @@ JSONValue Parser::parse() {
                 }
             }
             currToken = scanner.scan();
-            return JSONValue(std::move(object));
+            return JSONValue(move(object));
         }
 
         case TokenType::LBracket: {
@@ -61,13 +61,13 @@ JSONValue Parser::parse() {
                 }
             }
             currToken = scanner.scan();
-            return JSONValue(std::move(array));
+            return JSONValue(move(array));
         }
 
         case TokenType::String: {
             string str(currToken.value);
             currToken = scanner.scan();
-            return JSONValue(std::move(str));
+            return JSONValue(move(str));
         }
 
         case TokenType::Number: {

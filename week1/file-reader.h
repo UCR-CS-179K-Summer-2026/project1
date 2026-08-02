@@ -12,7 +12,7 @@
 
 using namespace std;
 
-vector<JSONValue> readFile(const std::string& path);
+vector<JSONValue> readFile(const string& path);
 
 // Reads a .jsonl file (one JSON object per line) and returns the parsed
 // records, in order, as an owned tree per line (JSONValue is move-only).
@@ -31,7 +31,7 @@ vector<JSONValue> readJsonFile(const string& contents);
 struct LookupResult {
     bool ok;
     const JSONValue* value;  // valid when ok == true
-    std::string error;       // valid when ok == false, e.g. "field 'name' not found"
+    string error;            // valid when ok == false, e.g. "field 'name' not found"
 };
 
 // Looks up a dotted/bracketed path inside a JSONValue tree.
@@ -39,8 +39,8 @@ struct LookupResult {
 //   .name
 //   .student.name
 //   .scores[0]
-LookupResult lookup(const JSONValue& value, const std::string& path);
+LookupResult lookup(const JSONValue& value, const string& path);
 
 // Formats a LookupResult the way it should appear on the terminal,
 // e.g. strings get quotes, numbers don't, errors are readable.
-std::string formatResult(const LookupResult& result);
+string formatResult(const LookupResult& result);

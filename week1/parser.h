@@ -1,7 +1,7 @@
 #pragma once
 
 #include "scanner.h"
-#include "value.cpp"
+#include "value.h"
 
 #include <iostream>
 
@@ -14,7 +14,7 @@ class Parser {
     ParserType fileType;
 
     public:
-    Parser(std::string_view json, ParserType type ) : scanner(json, type), currToken(scanner.scan()), fileType(type) {}
+    Parser(string_view json, ParserType type ) : scanner(json, type), currToken(scanner.scan()), fileType(type) {}
 
     JSONValue parse();
 };
