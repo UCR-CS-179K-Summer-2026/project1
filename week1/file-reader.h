@@ -17,10 +17,12 @@ vector<JSONValue> readFile(const string& path);
 // Reads a .jsonl file (one JSON object per line) and returns the parsed
 // records, in order, as an owned tree per line (JSONValue is move-only).
 //
-// - A blank/whitespace-only line is stored as a JSONNull.
-// - A line that fails to parse prints a warning (with line number) and is
-//   also stored as a JSONNull.
-// Both cases keep records[i] aligned with line i in the file.
+// - A blank/whitespace-only line is skipped entirely (no record is added
+//   for it), so records[i] does NOT correspond to line i in the file.
+// - A line that fails to parse prints a warning (with line number) to
+//   stderr and aborts the read early: the records parsed so far are
+//   discarded and an empty vector is returned, rather than skipping just
+//   that line.
 vector<JSONValue> readJsonlFile(const string& contents);
 vector<JSONValue> readJsonFile(const string& contents);
 

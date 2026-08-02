@@ -24,6 +24,24 @@ documented on our [project design page](https://ucr-cs-179k-summer-2026.github.i
 
 C++
 
+## Build & Run
+
+Requires CMake 3.16+ and a C++17 compiler.
+
+```sh
+cmake -B build
+cmake --build build
+
+./build/demo         # Sprint 1 demo: reads students.json, runs a lookup query
+./build/test_lookup  # lookup() test cases
+```
+
+`CMakeLists.txt` lives at the repo root and currently builds from `week1/`
+(Sprint 1's code) — it'll get repointed at whichever folder holds the
+current sprint's code as later weeks land. See the
+[Build System section](https://ucr-cs-179k-summer-2026.github.io/project1/#build-system)
+of the design page for why we use CMake instead of manual `g++` commands.
+
 ## Major Features
 
 - **Get** — retrieve the value at a given path in a JSON object.

@@ -1,3 +1,6 @@
+// This file is meant to define the JSONValue class, which is a variant type that can hold any of the six JSON value types: array, boolean, null, number, object, or string. 
+// It also defines the ValueType enum to represent the type of a JSON value.
+// The JSONValue class uses std::variant to hold the actual value, and provides constructors for each type, as well as methods to get the type and value.
 #pragma once
 
 #include <cstdint>
@@ -9,12 +12,6 @@
 
 using namespace std;
 
-/*Note: Valid JSONs require keys to be in "double quotes" ('single quotes' are invalid)
-    'Single quotes' are also invalid for strings
-    Trailing commas are invalid- this means the last element in an array/object cannot be followed by a comma
-    Blackslash\ precedes a literal*/
-
-//Remember order of these matters & corresponds to the order in the variant
 enum class ValueType : uint8_t {Array, Boolean, Null, Number, Object, String};
 
 class JSONValue;

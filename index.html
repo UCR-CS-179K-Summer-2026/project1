@@ -352,6 +352,7 @@
       <a href="#edge-cases">Edge Cases</a>
       <a href="#query-language">Query Language</a>
       <a href="#algorithms">Algorithms &amp; Optimizations</a>
+      <a href="#build-system">Build System</a>
       <a href="#timeline">Timeline</a>
     </nav>
 
@@ -795,6 +796,84 @@ string formatResult(const LookupResult&amp; result);</code></pre>
         </div>
       </section>
 
+      <section id="build-system">
+        <h2>Build System</h2>
+        <p>
+          Sprint 1 was built with one <code>g++ ...</code> command per person, copy-pasted
+          from a comment at the top of each driver file (<code>demo.cpp</code>,
+          <code>test_lookup.cpp</code>). That already went stale once — a leftover
+          reference to the pre-rename <code>jsonl-reader.cpp</code> broke
+          <code>test_lookup.cpp</code>'s documented build command after the file became
+          <code>file-reader.cpp</code>, and nothing caught it until someone actually tried
+          to build it. As of Aug 2, the whole project builds through one root-level
+          <a href="https://github.com/UCR-CS-179K-Summer-2026/project1/blob/main/CMakeLists.txt"><code>CMakeLists.txt</code></a>
+          instead.
+        </p>
+
+        <h3>Why CMake instead of hand-typed g++ commands</h3>
+        <p class="muted">
+          Four reasons this was worth adopting mid-sprint rather than staying with manual
+          commands:
+        </p>
+        <table>
+          <thead>
+            <tr><th>Manual <code>g++</code></th><th>CMake</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>File list lives in a comment per driver, can silently go stale</td>
+              <td>File list lives in <code>CMakeLists.txt</code> — the thing that actually
+                builds, can't drift from itself</td>
+            </tr>
+            <tr>
+              <td>Every invocation recompiles every source, every time</td>
+              <td>Incremental — <code>cmake --build build</code> only recompiles what
+                changed</td>
+            </tr>
+            <tr>
+              <td>Flags (<code>-std=c++17 -Wall -Wextra</code>) depend on whoever typed
+                the command remembering them</td>
+              <td>Flags are set once in <code>CMakeLists.txt</code>, applied to every
+                target automatically</td>
+            </tr>
+            <tr>
+              <td>No optimization flag in any documented command — compiles at the
+                default, <code>-O0</code></td>
+              <td>Defaults to a <code>Release</code> build — see below</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Layout &amp; usage</h3>
+        <p class="muted">
+          <code>CMakeLists.txt</code> lives at the repo root and currently points at
+          <code>week1/</code> as the active source for the <code>demo</code> and
+          <code>test_lookup</code> targets. The <code>week1</code>/<code>week2</code>/…
+          folders are a weekly progress log, not each an independently runnable target —
+          we don't build all of them at once. As the "final" version settles into a
+          specific folder, <code>CMakeLists.txt</code> gets repointed at that folder rather
+          than the project growing a build target per week.
+        </p>
+        <pre><code>cmake -B build          # configure once
+cmake --build build      # (re)build — only recompiles what changed
+./build/demo
+./build/test_lookup</code></pre>
+        <p class="muted">
+          <code>demo.cpp</code> opens <code>students.json</code> via a relative path, so a
+          post-build step copies the sample data next to the built binary — <code>./build/demo</code>
+          works regardless of which directory you run it from, instead of only working when
+          launched from inside <code>week1/</code>.
+        </p>
+
+        <div class="callout">
+          <strong>Repo hygiene that came with this:</strong> <code>build/</code> and other
+          CMake-generated files are gitignored, and the compiled <code>week1/demo</code>
+          binary that had been committed to the repo (a stale artifact from the old manual
+          workflow) was untracked — the build output belongs in the ignored
+          <code>build/</code> directory now, not in source control.
+        </div>
+      </section>
+
       <section id="timeline">
         <h2>Timeline</h2>
         <p class="muted">
@@ -829,6 +908,11 @@ string formatResult(const LookupResult&amp; result);</code></pre>
             <div class="date">Aug 1</div>
             <h4>Cleanup &amp; docs <span class="status done">done</span></h4>
             <p>Standardized on <code>using namespace std;</code> across every file (professor confirmed compile time isn't graded, runtime performance is), fixed a stale include left over from the rename, and brought this page up to date.</p>
+          </div>
+          <div class="entry">
+            <div class="date">Aug 2</div>
+            <h4>Bug pass &amp; CMake <span class="status done">done</span></h4>
+            <p>Fixed a crash on malformed top-level JSON, an uncaught-exception crash in <code>demo.cpp</code> on file-not-found, and a scanner bug that rejected valid numbers followed by whitespace. Replaced the per-person <code>g++</code> commands with a root <a href="#build-system">CMake build</a> — see that section for why.</p>
           </div>
 
           <div class="sprint-label">Sprints 2&ndash;5 (Weeks 2&ndash;5) — planned</div>
