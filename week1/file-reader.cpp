@@ -1,6 +1,6 @@
 #include "file-reader.h"
 
-vector<JSONValue> readFile(const std::string& path) {
+vector<JSONValue> readFile(const string& path) {
     ifstream file(path);
     if (!file.is_open()) {
         throw runtime_error(
@@ -30,9 +30,9 @@ vector<JSONValue> readFile(const std::string& path) {
 
 /*NOTE: records[i] NO LONGER corresponds to line i in the file. lineNumber
 should solely be used for error reporting */
-std::vector<JSONValue> readJsonlFile(const std::string& contents) {
-    std::vector<JSONValue> records;
-    std::string line;
+vector<JSONValue> readJsonlFile(const string& contents) {
+    vector<JSONValue> records;
+    string line;
     int lineNumber = 0;
 
     istringstream stream(contents);
@@ -41,7 +41,7 @@ std::vector<JSONValue> readJsonlFile(const std::string& contents) {
         while (getline(stream, line)) {
             ++lineNumber;
 
-            if (line.find_first_not_of(" \t\r\n") == std::string::npos) {
+            if (line.find_first_not_of(" \t\r\n") == string::npos) {
                 continue;
             }
 
@@ -49,7 +49,7 @@ std::vector<JSONValue> readJsonlFile(const std::string& contents) {
             records.push_back(parser.parse());
         }
     } catch (const exception& e) {
-        std::cerr << "Warning: failed to parse (" << e.what() << " at line " << lineNumber << ")\n";
+        cerr << "Warning: failed to parse (" << e.what() << " at line " << lineNumber << ")\n";
         return {};
     }
 
@@ -76,26 +76,26 @@ vector<JSONValue> readJsonFile(const string& contents) {
 
 namespace {
 
-LookupResult error(const std::string& message) {
+LookupResult error(const string& message) {
     return {false, nullptr, message};
 }
 
-std::string formatValue(const JSONValue& value) {
+string formatValue(const JSONValue& value) {
     switch (value.getType()) {
         case ValueType::Null:
             return "null";
         case ValueType::Boolean:
-            return std::get<bool>(value.getValue()) ? "true" : "false";
+            return get<bool>(value.getValue()) ? "true" : "false";
         case ValueType::Number: {
-            std::ostringstream out;
-            out << std::get<double>(value.getValue());
+            ostringstream out;
+            out << get<double>(value.getValue());
             return out.str();
         }
         case ValueType::String:
-            return "\"" + std::get<string>(value.getValue()) + "\"";
+            return "\"" + get<string>(value.getValue()) + "\"";
         case ValueType::Object: {
-            const auto& obj = std::get<ObjectValue>(value.getValue());
-            std::ostringstream out;
+            const auto& obj = get<ObjectValue>(value.getValue());
+            ostringstream out;
             out << "{";
             for (size_t i = 0; i < obj.size(); ++i) {
                 if (i > 0) out << ",";
@@ -105,8 +105,8 @@ std::string formatValue(const JSONValue& value) {
             return out.str();
         }
         case ValueType::Array: {
-            const auto& arr = std::get<ArrayValue>(value.getValue());
-            std::ostringstream out;
+            const auto& arr = get<ArrayValue>(value.getValue());
+            ostringstream out;
             out << "[";
             for (size_t i = 0; i < arr.size(); ++i) {
                 if (i > 0) out << ",";
@@ -121,7 +121,7 @@ std::string formatValue(const JSONValue& value) {
 
 }  // namespace
 
-LookupResult lookup(const JSONValue& value, const std::string& path) {
+LookupResult lookup(const JSONValue& value, const string& path) {
     const JSONValue* current = &value;
     size_t i = 0;
 
@@ -130,12 +130,12 @@ LookupResult lookup(const JSONValue& value, const std::string& path) {
             ++i;
             size_t start = i;
             while (i < path.size() && path[i] != '.' && path[i] != '[') ++i;
-            std::string field = path.substr(start, i - start);
+            string field = path.substr(start, i - start);
 
             if (current->getType() != ValueType::Object) {
                 return error("expected an object to look up field '" + field + "'");
             }
-            const auto& obj = std::get<ObjectValue>(current->getValue());
+            const auto& obj = get<ObjectValue>(current->getValue());
 
             const JSONValue* found = nullptr;
             for (const auto& entry : obj) {
@@ -156,20 +156,20 @@ LookupResult lookup(const JSONValue& value, const std::string& path) {
             if (i >= path.size()) {
                 return error("missing closing ']' in path");
             }
-            std::string indexStr = path.substr(start, i - start);
+            string indexStr = path.substr(start, i - start);
             ++i;  // skip ']'
 
             int index;
             try {
-                index = std::stoi(indexStr);
-            } catch (const std::exception&) {
+                index = stoi(indexStr);
+            } catch (const exception&) {
                 return error("invalid array index '" + indexStr + "'");
             }
 
             if (current->getType() != ValueType::Array) {
                 return error("expected an array to index with [" + indexStr + "]");
             }
-            const auto& arr = std::get<ArrayValue>(current->getValue());
+            const auto& arr = get<ArrayValue>(current->getValue());
 
             if (index < 0 || static_cast<size_t>(index) >= arr.size()) {
                 return error("index " + indexStr + " out of range");
@@ -177,14 +177,14 @@ LookupResult lookup(const JSONValue& value, const std::string& path) {
             current = &arr[static_cast<size_t>(index)];
 
         } else {
-            return error("invalid path syntax at position " + std::to_string(i));
+            return error("invalid path syntax at position " + to_string(i));
         }
     }
 
     return {true, current, ""};
 }
 
-std::string formatResult(const LookupResult& result) {
+string formatResult(const LookupResult& result) {
     if (!result.ok) {
         return "Error: " + result.error;
     }

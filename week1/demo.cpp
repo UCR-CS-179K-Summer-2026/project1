@@ -10,15 +10,15 @@
 #include "file-reader.h"
 
 int main() {
-    std::string path = "students.json";
-    std::string query = ".student[4].scores";
+    string path = "students.json";
+    string query = ".student[4].scores";
 
-    std::cout << "Reading " << path << ", query: " << query << "\n\n";
+    cout << "Reading " << path << ", query: " << query << "\n\n";
 
     auto records = readFile(path);
     for (const auto& record : records) {
         LookupResult result = lookup(record, query);
-        std::cout << formatResult(result) << "\n";
+        cout << formatResult(result) << "\n";
     }
 
     return 0;
