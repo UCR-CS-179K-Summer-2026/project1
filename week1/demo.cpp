@@ -11,7 +11,7 @@
 
 int main() {
     string path = "students.json";
-    string query = ".student[4].scores";
+    string query = ".student[2].scores";
 
     cout << "Reading " << path << ", query: " << query << "\n\n";
 

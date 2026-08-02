@@ -279,6 +279,50 @@
       .roles .card .owner { color: var(--accent); font-weight: 600; font-size: 0.85rem; margin-bottom: 0.5rem; }
       .roles .card ul { margin: 0.4rem 0 0; padding-left: 1.1rem; font-size: 0.85rem; color: var(--fg-muted); }
 
+      /* timeline */
+      .timeline {
+        position: relative;
+        margin-top: 1rem;
+        padding-left: 1.6rem;
+        border-left: 2px solid var(--border);
+      }
+      .timeline .entry {
+        position: relative;
+        padding-bottom: 1.5rem;
+      }
+      .timeline .entry:last-child { padding-bottom: 0; }
+      .timeline .entry::before {
+        content: "";
+        position: absolute;
+        left: -1.85rem;
+        top: 0.3rem;
+        width: 0.6rem;
+        height: 0.6rem;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+      .timeline .entry.planned::before { background: var(--border); }
+      .timeline .date {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin-bottom: 0.2rem;
+      }
+      .timeline .entry.planned .date { color: var(--fg-muted); }
+      .timeline h4 { margin: 0 0 0.25rem; font-size: 1rem; }
+      .timeline p { margin: 0; color: var(--fg-muted); font-size: 0.9rem; }
+      .timeline .sprint-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--fg-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin: 1.6rem 0 0.6rem;
+      }
+      .timeline .sprint-label:first-child { margin-top: 0; }
+
       footer {
         text-align: center;
         color: var(--fg-muted);
@@ -308,6 +352,7 @@
       <a href="#edge-cases">Edge Cases</a>
       <a href="#query-language">Query Language</a>
       <a href="#algorithms">Algorithms &amp; Optimizations</a>
+      <a href="#timeline">Timeline</a>
     </nav>
 
     <main>
@@ -338,7 +383,7 @@
             <h4>Parser &amp; data model</h4>
             <ul>
               <li><code>parser.h</code> / <code>parser.cpp</code></li>
-              <li><code>value.cpp</code> — <code>JSONValue</code> (variant)</li>
+              <li><code>value.h</code> — <code>JSONValue</code> (variant)</li>
               <li><code>Parser::parse()</code></li>
             </ul>
           </div>
@@ -436,11 +481,76 @@
           </div>
         </div>
 
-        <div class="callout">
-          <strong>Note:</strong> Worth analyzing from a time cost perspective whether 
-          <code>JSONValue</code> should be implemented using <code>std::variant</code> or 
-          using polymorphism.
-        </div>
+        <h3>Previous structure: polymorphism</h3>
+        <p class="muted">
+          Sprint 1 started with <code>JSONValue</code> as an abstract base class with a
+          virtual <code>getType()</code>, and one concrete leaf class per
+          <code>ValueType</code> — <code>JSONNull</code>, <code>JSONBoolean</code>,
+          <code>JSONNumber</code>, <code>JSONString</code>, <code>JSONArray</code>,
+          <code>JSONObject</code>. Every node was heap-allocated behind a
+          <code>JSONValuePtr</code> (<code>unique_ptr&lt;JSONValue&gt;</code>), and arrays/objects
+          held <code>vector&lt;JSONValuePtr&gt;</code> / <code>vector&lt;pair&lt;string,
+          JSONValuePtr&gt;&gt;</code> — a pointer per child rather than the child itself.
+        </p>
+
+        <table>
+          <thead>
+            <tr><th></th><th>Polymorphism (before)</th><th>Variant (now)</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Per-node cost</td>
+              <td>1 heap allocation + vtable pointer per node</td>
+              <td>No allocation, no vtable — the tag is 1 byte inline</td>
+            </tr>
+            <tr>
+              <td>Type dispatch</td>
+              <td><code>getType()</code> is a virtual call (indirect, through the vtable)</td>
+              <td><code>variant::index()</code> — a direct integer load</td>
+            </tr>
+            <tr>
+              <td>Reading a value</td>
+              <td>Downcast (or an already-known concrete type) to reach the field</td>
+              <td><code>std::get&lt;T&gt;(value.getValue())</code>, checked against a closed set of alternatives</td>
+            </tr>
+            <tr>
+              <td>Tree layout</td>
+              <td>Graph of heap nodes linked by <code>unique_ptr</code> — pointer-chasing to traverse</td>
+              <td><code>JSONValue</code>s live directly inside the parent's <code>vector</code> — contiguous, cache-friendly</td>
+            </tr>
+            <tr>
+              <td>Extensibility</td>
+              <td>Add a new <code>ValueType</code> by adding a new subclass</td>
+              <td>Add a new <code>ValueType</code> by adding a variant alternative (touches every <code>switch</code>/<code>visit</code>, which the compiler flags as non-exhaustive)</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p class="muted">
+          For a JSON tree with thousands of nodes, the polymorphic version did thousands of
+          individual heap allocations (one <code>make_unique</code> per value) and paid a
+          vtable-pointer's worth of memory on <em>every single node</em>, including leaves
+          like a lone <code>true</code> or a short number. Traversing the tree meant chasing
+          pointers across whatever the allocator scattered them across, which is unfriendly
+          to the cache. The variant version allocates once per <code>vector</code>'s backing
+          storage (amortized across all of that container's children) instead of once per
+          value, drops the vtable pointer entirely, and keeps sibling values next to each
+          other in memory. Since our whole premise (per the README) is staying fast and
+          low-memory on large files, that tradeoff was worth making even though it meant
+          giving up some of the OOP ergonomics — <code>isString()</code>/<code>isArray()</code>-style
+          helpers, for example, are gone, replaced by a single <code>switch(getType())</code>
+          at each call site.
+        </p>
+
+        <p class="muted">
+          The honest tradeoff in the other direction: <code>sizeof(JSONValue)</code> is now
+          at least as big as its largest alternative (<code>ObjectValue</code>, a
+          <code>vector</code> of key/value pairs) plus a small tag, so a node that's "just a
+          bool" is heavier in isolation than a bare <code>JSONBoolean</code> used to be. That
+          cost is paid once per node either way (inline now vs. on the heap before) — it's a
+          wash on a small tree, and a clear win once the allocation count and pointer-chasing
+          start to dominate on a large one.
+        </p>
       </section>
 
       <section id="interfaces">
@@ -489,7 +599,7 @@ public:
 
 class Parser {
 public:
-    Parser(std::string_view json, ParserType type);
+    Parser(string_view json, ParserType type);
     JSONValue parse();
 };</code></pre>
 
@@ -502,11 +612,11 @@ vector&lt;JSONValue&gt; readJsonFile(const string&amp; contents);   // one Parse
 struct LookupResult {
     bool ok;
     const JSONValue* value;  // valid when ok == true, non-owning
-    std::string error;       // valid when ok == false
+    string error;            // valid when ok == false
 };
 
-LookupResult lookup(const JSONValue&amp; value, const std::string&amp; path);
-std::string formatResult(const LookupResult&amp; result);</code></pre>
+LookupResult lookup(const JSONValue&amp; value, const string&amp; path);
+string formatResult(const LookupResult&amp; result);</code></pre>
 
         <h3>CLI / driver (Ryan)</h3>
         <p class="muted">Sprint 1's driver is <code>demo.cpp</code>: reads a fixed file and query, prints one result per record. A general-purpose <code>./sluice students.json ".student.name"</code> CLI (argv-driven filename + query) is the target for the CLI stage.</p>
@@ -684,10 +794,66 @@ std::string formatResult(const LookupResult&amp; result);</code></pre>
           measure against.
         </div>
       </section>
+
+      <section id="timeline">
+        <h2>Timeline</h2>
+        <p class="muted">
+          Sprint-by-sprint history and roadmap. We'll keep adding entries here as each
+          sprint lands, so this section is the running log rather than a fixed plan.
+        </p>
+
+        <div class="timeline">
+          <div class="sprint-label">Sprint 1 (Week 1) — Jul 27–Aug 1</div>
+
+          <div class="entry">
+            <div class="date">Jul 27</div>
+            <h4>Kickoff &amp; role assignment</h4>
+            <p>Chose Option 2 (JSON analysis), wrote <a href="https://github.com/UCR-CS-179K-Summer-2026/project1/blob/main/week1/PLAN.md">Sprint 1's PLAN.md</a>, split into parser/data-model, reader/lookup, and CLI/testing roles.</p>
+          </div>
+          <div class="entry">
+            <div class="date">Jul 28–29</div>
+            <h4>First working parser</h4>
+            <p>Data-model concepts, a rough <code>Scanner</code>/<code>Parser</code> draft, and the first merge between branches to get end-to-end parsing working.</p>
+          </div>
+          <div class="entry">
+            <div class="date">Jul 30</div>
+            <h4>Polymorphism &rarr; <code>std::variant</code></h4>
+            <p>Replaced the abstract-base/6-subclass <code>JSONValue</code> with a single class wrapping a <code>variant</code> — see <a href="#classes">Classes &amp; Data Model</a> for why.</p>
+          </div>
+          <div class="entry">
+            <div class="date">Jul 31</div>
+            <h4>Unified file reading</h4>
+            <p><code>jsonl-reader</code> renamed and generalized to <code>file-reader</code>, handling <code>.json</code> and <code>.jsonl</code> through the same <code>readFile()</code> entry point.</p>
+          </div>
+          <div class="entry">
+            <div class="date">Aug 1</div>
+            <h4>Cleanup &amp; docs <span class="status done">done</span></h4>
+            <p>Standardized on <code>using namespace std;</code> across every file (professor confirmed compile time isn't graded, runtime performance is), fixed a stale include left over from the rename, and brought this page up to date.</p>
+          </div>
+
+          <div class="sprint-label">Sprints 2&ndash;5 (Weeks 2&ndash;5) — planned</div>
+
+          <div class="entry planned">
+            <div class="date">Not yet scheduled</div>
+            <h4>Query language <span class="status planned">planned</span></h4>
+            <p>The remaining backlog from <a href="#query-language">Query Language</a>: <code>FILTER</code>, <code>SORT</code>, <code>LIMIT</code>, <code>GROUPBY</code>, <code>AVERAGE</code>, and chaining them (e.g. <code>GROUPBY | AVERAGE</code>). Not yet split across specific weeks.</p>
+          </div>
+          <div class="entry planned">
+            <div class="date">Not yet scheduled</div>
+            <h4>CLI &amp; build <span class="status planned">planned</span></h4>
+            <p>An argv-driven <code>./sluice &lt;file&gt; "&lt;query&gt;"</code> entry point and a CMake build, replacing the fixed-query <code>demo.cpp</code> driver.</p>
+          </div>
+          <div class="entry planned">
+            <div class="date">Not yet scheduled</div>
+            <h4>Performance pass <span class="status planned">planned</span></h4>
+            <p>Revisit the two spots already flagged in <a href="#algorithms">Algorithms &amp; Optimizations</a> — whole-file buffering before <code>.jsonl</code> parsing, and linear-scan field lookup — once there's a real large-file benchmark to measure against.</p>
+          </div>
+        </div>
+      </section>
     </main>
 
     <footer>
-      Sprint 1 &middot; <a href="https://github.com/UCR-CS-179K-Summer-2026/project1">UCR-CS-179K-Summer-2026/project1</a>
+      Sprint 1 complete &middot; <a href="#timeline">Timeline</a> &middot; <a href="https://github.com/UCR-CS-179K-Summer-2026/project1">UCR-CS-179K-Summer-2026/project1</a>
     </footer>
   </body>
 </html>
