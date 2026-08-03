@@ -1,3 +1,5 @@
+// This file is meant to define the Scanner class, which is responsible for scanning a JSON or JSONL string and producing a sequence of tokens.
+// It also defines the TokenType enum to represent the type of a token, and the Token struct to hold a token's type and value.
 #pragma once
 
 #include <cstdint>

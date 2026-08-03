@@ -1,3 +1,5 @@
+// This file is meant to define the Parser class, which is responsible for parsing a JSON or JSONL string and producing a JSONValue.
+// It uses the Scanner class to tokenize the input string, and implements a recursive descent parser to build the JSONValue.
 #pragma once
 
 #include "scanner.h"
