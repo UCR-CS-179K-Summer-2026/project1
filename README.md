@@ -32,9 +32,17 @@ Requires CMake 3.16+ and a C++17 compiler.
 cmake -B build
 cmake --build build
 
-./build/demo         # Sprint 1 demo: reads students.json, runs a lookup query
-./build/test_lookup  # lookup() test cases
+cd build
+./demo         # Sprint 1 demo: reads students.json, runs a lookup query
+./test_lookup  # lookup() test cases
 ```
+
+`demo.cpp` opens `students.json` via a relative path, and the build copies
+that file next to the built binary — so you have to run `demo` from
+*inside* `build/`. Running it as `./build/demo` from the repo root will
+fail with a "could not open 'students.json'" error, because your shell's
+working directory (the repo root) is what relative paths resolve against,
+not the location of the binary itself.
 
 `CMakeLists.txt` lives at the repo root and currently builds from `week1/`
 (Sprint 1's code) — it'll get repointed at whichever folder holds the

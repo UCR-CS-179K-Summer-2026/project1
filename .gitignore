@@ -1,6 +1,3 @@
-# macOS
-.DS_Store
-
 # Build output
 build/
 *.o
@@ -19,7 +16,6 @@ a.out
 
 # CMake — always built out-of-source into /build, but ignore in-source
 # artifacts too in case someone runs `cmake .` from the repo root by mistake
-build/
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
