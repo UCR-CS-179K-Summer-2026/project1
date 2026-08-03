@@ -1,3 +1,5 @@
+// This file is meant to implement the Scanner class, which is responsible for scanning a JSON or JSONL string and producing a sequence of tokens.
+// It also implements the scan() method, which returns the next token in the input string.
 #include "scanner.h"
 
 Token Scanner::scan() {
@@ -77,7 +79,8 @@ Token Scanner::scan() {
     if((*curr >= '0' && *curr <= '9') || *curr == '-') {
         const char* numberBegin = curr;
 
-        while(curr < end && *curr != ',' && *curr != ']' && *curr != '}' && *curr != ':') {
+        while(curr < end && *curr != ',' && *curr != ']' && *curr != '}' && *curr != ':'
+                && *curr != ' ' && *curr != '\t' && *curr != '\n' && *curr != '\r') {
             curr++;
         }
 

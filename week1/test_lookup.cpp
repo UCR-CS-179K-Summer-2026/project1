@@ -1,8 +1,9 @@
-// Standalone test driver for lookup()/formatResult(), now running against
-// Jules's real Parser instead of a hand-built tree.
+// This file is meant to test the lookup function, which takes a JSONValue and a path string, and returns a LookupResult that contains either the value at that path or an error message.
+// This is temporary until Ryan's demo.cpp is ready. The test cases here are similar to the ones in demo.cpp, but they are hardcoded for testing purposes.
 //
-// Build:
-//   g++ -std=c++17 -Wall -Wextra scanner.cpp parser.cpp file-reader.cpp test_lookup.cpp -o test_lookup
+// Build & run (see the repo README / design page's Build System section):
+//   cmake -B build && cmake --build build
+//   ./build/test_lookup
 #include <iostream>
 
 #include "file-reader.h"

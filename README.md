@@ -1,6 +1,6 @@
 # JSON/JSONL Parser
 
-## Summary
+## Purpose & Function
 
 This project is a command-line tool for parsing and querying JSON and JSONL
 (newline-delimited JSON) files. It's built with performance in mind — the
@@ -9,8 +9,7 @@ stays usable on large files and modest hardware.
 
 The tool supports a small query language for pulling data out of JSON
 records: getting a field, filtering, sorting, limiting, grouping, and
-aggregating. See [Major Features](#major-features) below for examples of
-each.
+aggregating with possibly more to come!
 
 Design details (system architecture, module interfaces, and algorithms) are
 documented on our [project design page](https://ucr-cs-179k-summer-2026.github.io/project1/).
@@ -25,20 +24,31 @@ documented on our [project design page](https://ucr-cs-179k-summer-2026.github.i
 
 C++
 
-## Building and Running
+## Build & Run
 
-Needs CMake and a C++17 compiler. From the repo root:
+Requires CMake 3.16+ and a C++17 compiler.
 
-    cmake -B build
-    cmake --build build
+```sh
+cmake -B build
+cmake --build build
 
-Run a query on a file:
+cd build
+./demo         # Sprint 1 demo: reads students.json, runs a lookup query
+./test_lookup  # lookup() test cases
+```
 
-    ./build/sluice tests/data/students.jsonl ".student.name"
+`demo.cpp` opens `students.json` via a relative path, and the build copies
+that file next to the built binary — so you have to run `demo` from
+*inside* `build/`. Running it as `./build/demo` from the repo root will
+fail with a "could not open 'students.json'" error, because your shell's
+working directory (the repo root) is what relative paths resolve against,
+not the location of the binary itself.
 
-Run the tests:
-
-    ./build/tests tests/data
+`CMakeLists.txt` lives at the repo root and currently builds from `week1/`
+(Sprint 1's code) — it'll get repointed at whichever folder holds the
+current sprint's code as later weeks land. See the
+[Build System section](https://ucr-cs-179k-summer-2026.github.io/project1/#build-system)
+of the design page for why we use CMake instead of manual `g++` commands.
 
 ## Major Features
 
@@ -83,8 +93,3 @@ Run the tests:
     Query: `GROUPBY(.city) | AVERAGE(.price)`
     JSON: `[{"id": 1, "city": "Riverside", "price": 450000}, {"id": 2, "city": "Riverside", "price": 480000}, {"id": 3, "city": "Los Angeles", "price": 800000}, {"id": 4, "city": "Riverside", "price": 460000}]`
     Result: `{"Riverside": 463333.33, "Los Angeles": 800000}`
-
-## Project Docs
-
-- [Sprint 1 plan and task assignments](week1/PLAN.md)
-- [Design docs (GitHub Pages)](https://ucr-cs-179k-summer-2026.github.io/project1/)

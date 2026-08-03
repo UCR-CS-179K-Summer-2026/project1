@@ -1,3 +1,6 @@
+// Person 2's contribution: reads a .json or .jsonl file into JSONValue
+// records via Person 1's Parser, and implements path lookup/formatting
+// against the resulting tree.
 #include "file-reader.h"
 
 vector<JSONValue> readFile(const string& path) {
@@ -28,8 +31,6 @@ vector<JSONValue> readFile(const string& path) {
     }
 }
 
-/*NOTE: records[i] NO LONGER corresponds to line i in the file. lineNumber
-should solely be used for error reporting */
 vector<JSONValue> readJsonlFile(const string& contents) {
     vector<JSONValue> records;
     string line;
@@ -58,9 +59,9 @@ vector<JSONValue> readJsonlFile(const string& contents) {
 
 vector<JSONValue> readJsonFile(const string& contents) {
     vector<JSONValue> records;
-    Parser parser(contents, ParserType::JSON);
 
     try {
+        Parser parser(contents, ParserType::JSON);
         JSONValue doc = parser.parse();
         if (doc.getType() == ValueType::Array) {
             records = get<ArrayValue>(doc.getValue());
@@ -68,7 +69,7 @@ vector<JSONValue> readJsonFile(const string& contents) {
             records.push_back(move(doc));
         }
     } catch (const exception& e) {
-        cerr << "Warning: failed to parse JSON file (" << e.what() << "), ";
+        cerr << "Warning: failed to parse JSON file (" << e.what() << ")\n";
     }
 
     return records;
