@@ -28,8 +28,6 @@ vector<JSONValue> readFile(const string& path) {
     }
 }
 
-/*NOTE: records[i] NO LONGER corresponds to line i in the file. lineNumber
-should solely be used for error reporting */
 vector<JSONValue> readJsonlFile(const string& contents) {
     vector<JSONValue> records;
     string line;
