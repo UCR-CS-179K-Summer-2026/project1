@@ -25,6 +25,21 @@ documented on our [project design page](https://ucr-cs-179k-summer-2026.github.i
 
 C++
 
+## Building and Running
+
+Needs CMake and a C++17 compiler. From the repo root:
+
+    cmake -B build
+    cmake --build build
+
+Run a query on a file:
+
+    ./build/sluice tests/data/students.jsonl ".student.name"
+
+Run the tests:
+
+    ./build/tests tests/data
+
 ## Major Features
 
 - **Get** — retrieve the value at a given path in a JSON object.
