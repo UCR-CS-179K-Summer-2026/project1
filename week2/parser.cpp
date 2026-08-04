@@ -16,7 +16,7 @@ JSONValue Parser::parse() {
                         throw runtime_error("Expected string key in object");
                     }
                 }
-                string key(currToken.value);
+                string key = unescapeString(currToken.value);
                 currToken = scanner.scan();
 
                 if(currToken.type != TokenType::Colon) {
@@ -67,7 +67,7 @@ JSONValue Parser::parse() {
         }
 
         case TokenType::String: {
-            string str(currToken.value);
+            string str = unescapeString(currToken.value);
             currToken = scanner.scan();
             return JSONValue(move(str));
         }
@@ -92,4 +92,38 @@ JSONValue Parser::parse() {
         default:
             throw runtime_error("Unexpected token");
     }
+}
+
+string Parser::unescapeString(const string_view& str) {
+    string result;
+
+    for (size_t i = 0; i < str.size(); i++) {
+        if (str[i] == '\\' && i + 1 < str.size()) {
+            i++;
+            switch (str[i]) {
+                case '\"': result += '\"'; break;
+                case '\\': result += '\\'; break;
+                case '/':  result += '/';  break;
+                case 'b':  result += '\b'; break;
+                case 'f':  result += '\f'; break;
+                case 'n':  result += '\n'; break;
+                case 'r':  result += '\r'; break;
+                case 't':  result += '\t'; break;
+                case 'u':
+                    if (i + 4 < str.size()) {
+                        string hex = string(str.substr(i + 1, 4));
+                        char16_t codePoint = static_cast<char16_t>(stoi(hex, nullptr, 16));
+                        result += static_cast<char>(codePoint);
+                        i += 4;
+                    }
+
+                    break;
+                default:
+                    continue;
+            }
+        } else {
+            result += str[i];
+        }
+    }
+    return result;
 }
