@@ -46,7 +46,26 @@ Token Scanner::scan() {
 
         while(curr < end && *curr != '\"') {
             if(*curr == '\\' && curr + 1 < end) {
-                curr += 2;
+                if(*(curr + 1) == 'u' && curr + 5 < end) {
+                    curr += 6;  // skip \uXXXX
+                } else if (*(curr + 1) == '\"' || *(curr + 1) == '\\' || *(curr + 1) == '/' ||
+                           *(curr + 1) == 'b' || *(curr + 1) == 'f' || *(curr + 1) == 'n' ||
+                           *(curr + 1) == 'r' || *(curr + 1) == 't') {
+                    curr += 2;  // skip escaped character
+                } else {
+                    if(fileType == ParserType::JSON) {
+                        throw runtime_error("Illegal escape sequence in string at line " + to_string(currLine));
+                    } else {
+                        throw runtime_error("Illegal escape sequence in string");
+                    }
+                }
+
+            } else if(static_cast<unsigned char>(*curr) < 0x20) {
+                if(fileType == ParserType::JSON) {
+                    throw runtime_error("Illegal unescaped control character in string at line " + to_string(currLine));
+                } else {
+                    throw runtime_error("Illegal unescaped control character in string");
+                }
             } else {
                 curr++;
             }
