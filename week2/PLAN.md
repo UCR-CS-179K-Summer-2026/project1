@@ -140,8 +140,7 @@ other weird edge cases like null bytes.
 
 ## Demo
 
-Target for Sprint 2's demo: a chained query (`GROUPBY` piped into
-`AVERAGE`) run against Ryan's large datasets in `json/`, showing it
+Target for Sprint 2's demo: a working query parser along with 2 functions that work, showing it
 handles escaped/emoji strings correctly, and the CLI accepting a directory
 instead of a single hardcoded file. Also handling all edge cases and implement
 all functions listed. 
