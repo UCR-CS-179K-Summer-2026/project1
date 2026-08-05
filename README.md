@@ -31,24 +31,73 @@ Requires CMake 3.16+ and a C++17 compiler.
 ```sh
 cmake -B build
 cmake --build build
-
-cd build
-./demo         # Sprint 1 demo: reads students.json, runs a lookup query
-./test_lookup  # lookup() test cases
 ```
 
-`demo.cpp` opens `students.json` via a relative path, and the build copies
-that file next to the built binary — so you have to run `demo` from
-*inside* `build/`. Running it as `./build/demo` from the repo root will
-fail with a "could not open 'students.json'" error, because your shell's
-working directory (the repo root) is what relative paths resolve against,
-not the location of the binary itself.
+That produces two binaries in `build/`: `sluice` (the CLI) and `tests`
+(the test suite). Run both from the repo root:
 
-`CMakeLists.txt` lives at the repo root and currently builds from `week1/`
-(Sprint 1's code) — it'll get repointed at whichever folder holds the
-current sprint's code as later weeks land. See the
+```sh
+./build/sluice        # opens the menu
+./build/tests         # runs the test suite
+```
+
+The test suite reads its sample files from `tests/data`, and that path is
+resolved against your current directory — so run it from the repo root, or
+pass the directory yourself with `./build/tests path/to/tests/data`.
+
+`CMakeLists.txt` lives at the repo root and builds from `week2/` (Sprint
+2's code) — it gets repointed at whichever folder holds the current
+sprint's code as later weeks land. See the
 [Build System section](https://ucr-cs-179k-summer-2026.github.io/project1/#build-system)
 of the design page for why we use CMake instead of manual `g++` commands.
+
+## Using the CLI
+
+Start it with no arguments and you get a menu:
+
+| Command | What it does                    |
+| ------- | ------------------------------- |
+| `\u`    | upload a `.json`/`.jsonl` file  |
+| `\s`    | search & query the loaded file  |
+| `\m`    | show the menu again             |
+| `\q`    | quit                            |
+
+Upload a file once and you can run as many queries against it as you want
+— the records stay loaded, so `\s` doesn't re-read the file each time. The
+prompt shows which file you're working on.
+
+```
+> \u
+Enter path to your file: week1/students.jsonl
+File students.jsonl uploaded successfully. (4 records)
+[students.jsonl] > \s
+Enter your search query: .student.name
+Ryan
+Javier
+Jules
+Nobody
+[students.jsonl] > \s
+Enter your search query: .student.scores[0]
+90
+95
+92
+Error: field 'scores' not found
+[students.jsonl] > \q
+Thanks for choosing our program!
+```
+
+The query runs against every record in the file, so you get one line of
+output per record. A record that doesn't have the field you asked for
+reports an error on its own line instead of stopping the whole query.
+
+Anything that isn't a `.json` or `.jsonl` file is rejected, and a path that
+can't be opened or parsed just asks you for another one.
+
+If you'd rather skip the menu, the direct form still works:
+
+```sh
+./build/sluice week1/students.jsonl ".student.name"
+```
 
 ## Major Features
 
