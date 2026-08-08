@@ -239,7 +239,14 @@ NodeId QueryParser::parseGet() {
 
     while(currToken.type != QueryTokenType::RParen) {
         if(currToken.type != QueryTokenType::String) {
-            throw runtime_error("Expected property name in GET");
+            if(currToken.type == QueryTokenType::Number) {
+                string numStr(currToken.value);
+                if(numStr.find('.') != string::npos || numStr.find('-') != string::npos || numStr.find('e') != string::npos || numStr.find('E') != string::npos) {
+                    throw runtime_error("Invalid index number in GET- number must be a positive whole number");
+                }
+            } else {
+                throw runtime_error("Expected property name or index in GET");
+            }
         }
         props.push_back(currToken.value);
         advance();

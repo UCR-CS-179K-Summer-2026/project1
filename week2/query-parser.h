@@ -1,5 +1,7 @@
 #pragma once
 
+#include "value.h"
+
 #include <cstdint>
 #include <regex>
 #include <string>
@@ -15,7 +17,15 @@ enum class Direction : uint8_t {Asc, Desc};
 struct QueryToken {
     QueryTokenType type;
     string_view value;
+
     QueryToken(QueryTokenType t, string_view v) : type(t), value(v) {}
+
+    string getUnescaped() const {
+        if (type != QueryTokenType::String) {
+            throw runtime_error("getUnescaped() called on non-string token");
+        }
+        return unescapeString(value);
+    }
 };
 
 //Scanner
