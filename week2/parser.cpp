@@ -94,6 +94,7 @@ JSONValue Parser::parse() {
     }
 }
 
+/*
 string Parser::unescapeString(const string_view& str) {
     string result;
 
@@ -127,3 +128,4 @@ string Parser::unescapeString(const string_view& str) {
     }
     return result;
 }
+*/

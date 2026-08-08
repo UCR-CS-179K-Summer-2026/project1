@@ -52,33 +52,38 @@ of the design page for why we use CMake instead of manual `g++` commands.
 
 ## Major Features
 
-- **Get** — retrieve the value at a given path in a JSON object.
+- **Get** — retrieve the value at a given path in a JSON object.  
+The input is the name of a key and the output is the value stored at said key.
 
-    Query: `.a`
+    Query: `GET("a")`
     JSON: `{"a": 1, "b": 2}`
     Result: `1`
 
-- **Filter & Comparison** — keep only the records matching a comparison.
+- **Filter & Comparison** — keep only the records matching a comparison.  
+The input is a boolean expression containing one or more path and the output is an array of objects that hold true for the boolean expression.
 
-    Query: `FILTER(.a > 1)`
+    Query: `FILTER(GET("a") > 1)`
     JSON: `[{"a": 1, "b": 2}, {"a": 2, "b": 2}]`
     Result: `[{"a": 2, "b": 2}]`
 
-- **Sort** — order an array of records by a field, ascending or descending.
+- **Sort** — order an array of records by a field, ascending or descending.  
+The input is two arguments: a key name and the direction. The output is a sorted array.
 
-    Query: `SORT(a, "asc")`
+    Query: `SORT("a", asc)`
     JSON: `[{"a": 1, "b": 2}, {"a": 0, "b": 3}]`
     Result: `[{"a": 0, "b": 3}, {"a": 1, "b": 2}]`
 
-- **Limit** — return only the first N records.
+- **Limit** — return only the first N records.  
+The input is a number N and the output is an array of size N.
 
     Query: `LIMIT(1)`
     JSON: `[{"a": 1, "b": 2}, {"a": 0, "b": 3}]`
     Result: `{"a": 1, "b": 2}`
 
-- **GroupBy** — bucket records by the value of a field.
+- **GroupBy** — bucket records by the value of a field.  
+The input is a path and the output is an array with different properties as key, and an array with all items having that property as value.
 
-    Query: `GROUPBY(.a)`
+    Query: `GROUPBY(GET("a"))`
     JSON: `[{"a": 1, "b": 2}, {"a": 0, "b": 3}, {"a": 1, "b": 5}]`
     Result:
     ```json
@@ -88,8 +93,9 @@ of the design page for why we use CMake instead of manual `g++` commands.
     }
     ```
 
-- **Average** — compute the mean of a field, optionally after grouping.
+- **Average** — compute the mean of a field, optionally after grouping.  
+The input is a path to a number value and the output is a number.
 
-    Query: `GROUPBY(.city) | AVERAGE(.price)`
+    Query: `GROUPBY(GET("a")) | AVERAGE(GET("price"))`
     JSON: `[{"id": 1, "city": "Riverside", "price": 450000}, {"id": 2, "city": "Riverside", "price": 480000}, {"id": 3, "city": "Los Angeles", "price": 800000}, {"id": 4, "city": "Riverside", "price": 460000}]`
     Result: `{"Riverside": 463333.33, "Los Angeles": 800000}`
