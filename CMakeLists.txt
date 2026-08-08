@@ -12,23 +12,13 @@ endif()
 add_compile_options(-Wall -Wextra)
 
 set(CORE_SOURCES
-    week1/scanner.cpp
-    week1/parser.cpp
-    week1/file-reader.cpp
+    week2/scanner.cpp
+    week2/parser.cpp
+    week2/file-reader.cpp
 )
 
-add_executable(demo ${CORE_SOURCES} week1/demo.cpp)
-target_include_directories(demo PRIVATE week1)
+add_executable(sluice ${CORE_SOURCES} week2/main.cpp)
+target_include_directories(sluice PRIVATE week2)
 
-# demo.cpp opens "students.json" via a relative path, so copy the sample
-# data next to the built binary — otherwise ./build/demo only works when
-# run with week1/ as the working directory.
-add_custom_command(TARGET demo POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${CMAKE_SOURCE_DIR}/week1/students.json
-        ${CMAKE_SOURCE_DIR}/week1/students.jsonl
-        $<TARGET_FILE_DIR:demo>
-)
-
-add_executable(test_lookup ${CORE_SOURCES} week1/test_lookup.cpp)
-target_include_directories(test_lookup PRIVATE week1)
+add_executable(tests ${CORE_SOURCES} tests/tests.cpp)
+target_include_directories(tests PRIVATE week2)
