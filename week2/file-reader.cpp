@@ -122,6 +122,54 @@ string formatValue(const JSONValue& value) {
 
 }  // namespace
 
+//Roughly rewritten to support GET("propName") syntax.
+LookupResult get(const JSONValue& value, const vector<string_view>& path) {
+    const JSONValue* current = &value;
+
+    for (const string_view& prop : path) {
+        if (current->getType() == ValueType::Object) {
+            const auto& obj = get<ObjectValue>(current->getValue());
+
+            const JSONValue* found = nullptr;
+            for (const auto& entry : obj) {
+                if (unescapeString(entry.first) == unescapeString(prop)) {
+                    found = &entry.second;
+                    break;
+                }
+            }
+            if (!found) {
+                return error("field '" + string(prop) + "' not found");
+            }
+            current = found;
+
+        } else if (current->getType() == ValueType::Array) {
+            string indexStr(prop);
+            size_t parsedLen = 0;
+            int index;
+            try {
+                index = stoi(indexStr, &parsedLen);
+            } catch (const exception&) {
+                return error("expected a numeric index to access an array, got '" + indexStr + "'");
+            }
+            if (parsedLen != indexStr.size()) {
+                return error("expected a numeric index to access an array, got '" + indexStr + "'");
+            }
+
+            const auto& arr = get<ArrayValue>(current->getValue());
+            if (index < 0 || static_cast<size_t>(index) >= arr.size()) {
+                return error("index " + indexStr + " out of range");
+            }
+            current = &arr[static_cast<size_t>(index)];
+
+        } else {
+            return error("cannot look up '" + string(prop) + "' on a non-object, non-array value");
+        }
+    }
+
+    return {true, current, ""};
+}
+
+/*
 LookupResult lookup(const JSONValue& value, const string& path) {
     const JSONValue* current = &value;
     size_t i = 0;
@@ -184,7 +232,7 @@ LookupResult lookup(const JSONValue& value, const string& path) {
 
     return {true, current, ""};
 }
-
+*/
 string formatResult(const LookupResult& result) {
     if (!result.ok) {
         return "Error: " + result.error;

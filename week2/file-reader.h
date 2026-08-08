@@ -1,6 +1,7 @@
 #pragma once
 
 #include "parser.h"
+#include "value.h"
 
 #include <filesystem>
 #include <fstream>
@@ -8,6 +9,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using namespace std;
@@ -36,12 +38,16 @@ struct LookupResult {
     string error;            // valid when ok == false, e.g. "field 'name' not found"
 };
 
-// Looks up a dotted/bracketed path inside a JSONValue tree.
-// Supported path syntax (see PLAN.md JSON Examples):
-//   .name
-//   .student.name
-//   .scores[0]
-LookupResult lookup(const JSONValue& value, const string& path);
+// Looks up a property (or nested path of properties/indices) inside a
+// JSONValue tree, per the arguments to a GET(...) call, e.g.:
+//   GET()                    -> path == {}                (returns value itself)
+//   GET("name")              -> path == {"name"}
+//   GET("student", "name")   -> path == {"student", "name"}
+//   GET("scores", "0")       -> path == {"scores", "0"}
+// Each element of path is looked up as an object field name when the
+// current value is an object, or as a numeric array index when the
+// current value is an array.
+LookupResult get(const JSONValue& value, const vector<string_view>& path);
 
 // Formats a LookupResult the way it should appear on the terminal,
 // e.g. strings get quotes, numbers don't, errors are readable.

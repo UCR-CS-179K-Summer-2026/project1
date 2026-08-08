@@ -16,7 +16,7 @@ JSONValue Parser::parse() {
                         throw runtime_error("Expected string key in object");
                     }
                 }
-                string key = unescapeString(currToken.value);
+                string key(currToken.value);
                 currToken = scanner.scan();
 
                 if(currToken.type != TokenType::Colon) {
@@ -67,7 +67,7 @@ JSONValue Parser::parse() {
         }
 
         case TokenType::String: {
-            string str = unescapeString(currToken.value);
+            string str(currToken.value);
             currToken = scanner.scan();
             return JSONValue(move(str));
         }
@@ -94,6 +94,7 @@ JSONValue Parser::parse() {
     }
 }
 
+/*
 string Parser::unescapeString(const string_view& str) {
     string result;
 
@@ -127,3 +128,4 @@ string Parser::unescapeString(const string_view& str) {
     }
     return result;
 }
+*/

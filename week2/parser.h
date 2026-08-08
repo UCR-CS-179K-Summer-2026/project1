@@ -21,5 +21,5 @@ class Parser {
 
     JSONValue parse();
 
-    string unescapeString(const string_view& str);
+    //string unescapeString(const string_view& str);
 };
