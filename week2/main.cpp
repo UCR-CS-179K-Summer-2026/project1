@@ -4,12 +4,14 @@
 #include <iostream>
 
 #include "file-reader.h"
+#include "version.h"
 
 const int BOX_WIDTH = 37;
 
 void printUsage() {
     cout << "usage: streamline <file.json|file.jsonl> \"<lookup expression>\"\n"
          << "       streamline students.jsonl \".student.name\"\n\n"
+         << "       streamline --version\n\n"
          << "run streamline with no arguments to open the menu\n\n"
          << "lookup expressions look like .name, .student.name, or .scores[0]\n";
 }
@@ -146,32 +148,8 @@ bool doUpload(Session& session) {
     }
 }
 
-// Splits a dotted/bracketed path like ".student.scores[0]" into the
-// segments get() expects, e.g. {"student", "scores", "0"}.
-vector<string_view> splitPath(const string& path) {
-    vector<string_view> segments;
-    size_t i = 0;
-    while (i < path.size()) {
-        if (path[i] == '.') {
-            i++;
-            size_t start = i;
-            while (i < path.size() && path[i] != '.' && path[i] != '[') i++;
-            segments.push_back(string_view(path).substr(start, i - start));
-        } else if (path[i] == '[') {
-            i++;
-            size_t start = i;
-            while (i < path.size() && path[i] != ']') i++;
-            segments.push_back(string_view(path).substr(start, i - start));
-            if (i < path.size()) i++;  // skip ']'
-        } else {
-            i++;  // skip an unexpected character rather than getting stuck
-        }
-    }
-    return segments;
-}
-
 void printLookup(const JSONValue& record, const string& query) {
-    LookupResult result = get(record, splitPath(query));
+    LookupResult result = get(record, query);
 
     if (result.ok && result.value->getType() == ValueType::String) {
         cout << get<string>(result.value->getValue()) << "\n";
@@ -246,6 +224,9 @@ int main(int argc, char** argv) {
         string arg = argv[i];
         if (arg == "--help") {
             printUsage();
+            return 0;
+        } else if (arg == "--version") {
+            cout << "streamline " << getVersionId() << "\n";
             return 0;
         } else {
             args.push_back(arg);

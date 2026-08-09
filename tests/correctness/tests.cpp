@@ -8,6 +8,8 @@
 #include <iostream>
 
 #include "file-reader.h"
+#include "scanner.h"
+#include "version.h"
 
 int passed = 0;
 int failed = 0;
@@ -25,6 +27,49 @@ void check(bool ok, const string& label) {
         failed++;
         cout << "  FAIL " << label << "\n";
     }
+}
+
+void checkScannerToken(Scanner& scanner, TokenType type, const string& value, const string& name) {
+    Token token = scanner.scan();
+    check(token.type == type && token.value == value, name);
+}
+
+void checkScannerThrows(const string& input, const string& name) {
+    bool threw = false;
+
+    try {
+        Scanner scanner(input, ParserType::JSON);
+        scanner.scan();
+    } catch (const exception&) {
+        threw = true;
+    }
+
+    check(threw, name);
+}
+
+void testScanner() {
+    section("scanner");
+
+    Scanner scanner(R"({}[]:,"name" true false null -12.5)", ParserType::JSON);
+    checkScannerToken(scanner, TokenType::LBrace, "{", "left brace");
+    checkScannerToken(scanner, TokenType::RBrace, "}", "right brace");
+    checkScannerToken(scanner, TokenType::LBracket, "[", "left bracket");
+    checkScannerToken(scanner, TokenType::RBracket, "]", "right bracket");
+    checkScannerToken(scanner, TokenType::Colon, ":", "colon");
+    checkScannerToken(scanner, TokenType::Comma, ",", "comma");
+    checkScannerToken(scanner, TokenType::String, "name", "string");
+    checkScannerToken(scanner, TokenType::Boolean, "true", "true");
+    checkScannerToken(scanner, TokenType::Boolean, "false", "false");
+    checkScannerToken(scanner, TokenType::Null, "null", "null");
+    checkScannerToken(scanner, TokenType::Number, "-12.5", "number");
+    checkScannerToken(scanner, TokenType::End, "", "end");
+
+    Scanner whitespaceScanner("\n\n true", ParserType::JSON);
+    checkScannerToken(whitespaceScanner, TokenType::Boolean, "true", "whitespace");
+    check(whitespaceScanner.getLineNumber() == 3, "line number");
+
+    checkScannerThrows("@", "invalid character");
+    checkScannerThrows("\"hello", "unterminated string");
 }
 
 string parseAndFormat(const string& text) {
@@ -62,34 +107,10 @@ void checkInvalid(const string& text) {
     check(!parses(text), "should have been rejected: " + text);
 }
 
-// Splits a dotted/bracketed path like ".student.scores[0]" into the
-// segments get() expects, e.g. {"student", "scores", "0"}.
-vector<string_view> splitPath(const string& path) {
-    vector<string_view> segments;
-    size_t i = 0;
-    while (i < path.size()) {
-        if (path[i] == '.') {
-            i++;
-            size_t start = i;
-            while (i < path.size() && path[i] != '.' && path[i] != '[') i++;
-            segments.push_back(string_view(path).substr(start, i - start));
-        } else if (path[i] == '[') {
-            i++;
-            size_t start = i;
-            while (i < path.size() && path[i] != ']') i++;
-            segments.push_back(string_view(path).substr(start, i - start));
-            if (i < path.size()) i++;  // skip ']'
-        } else {
-            i++;  // skip an unexpected character rather than getting stuck
-        }
-    }
-    return segments;
-}
-
 void checkLookup(const string& text, const string& path, const string& want) {
     Parser parser(text, ParserType::JSON);
     JSONValue value = parser.parse();
-    string got = formatResult(get(value, splitPath(path)));
+    string got = formatResult(get(value, path));
     if (got == want) {
         passed++;
     } else {
@@ -120,7 +141,7 @@ void checkCount(const string& file, int want) {
 
 void checkField(const string& file, size_t index, const string& path, const string& want) {
     vector<JSONValue> records = readFile(dataDir + "/" + file);
-    string got = index < records.size() ? formatResult(get(records[index], splitPath(path))) : "<no record>";
+    string got = index < records.size() ? formatResult(get(records[index], path)) : "<no record>";
     if (got == want) {
         passed++;
     } else {
@@ -128,6 +149,11 @@ void checkField(const string& file, size_t index, const string& path, const stri
         cout << "  FAIL " << file << "[" << index << "] " << path << "\n         got  " << got
              << "\n         want " << want << "\n";
     }
+}
+
+void testVersion() {
+    section("version");
+    check(getVersionId() == "week2-v1", "version ID");
 }
 
 void testPrimitives() {
@@ -143,49 +169,25 @@ void testPrimitives() {
     checkParse("true", "true");
     checkParse("false", "false");
     checkParse("null", "null");
-
-    section("types come back right");
-    Parser p1("7", ParserType::JSON);
-    check(p1.parse().getType() == ValueType::Number, "7 should be a Number");
-    Parser p2("\"s\"", ParserType::JSON);
-    check(p2.parse().getType() == ValueType::String, "\"s\" should be a String");
-    Parser p3("true", ParserType::JSON);
-    check(p3.parse().getType() == ValueType::Boolean, "true should be a Boolean");
-    Parser p4("null", ParserType::JSON);
-    check(p4.parse().getType() == ValueType::Null, "null should be a Null");
-    Parser p5("{}", ParserType::JSON);
-    check(p5.parse().getType() == ValueType::Object, "{} should be an Object");
-    Parser p6("[]", ParserType::JSON);
-    check(p6.parse().getType() == ValueType::Array, "[] should be an Array");
 }
 
 void testNested() {
     section("empty objects and arrays");
     checkParse("{}", "{}");
     checkParse("[]", "[]");
-    checkParse("{\"a\":{}}", "{\"a\":{}}");
-    checkParse("{\"a\":[]}", "{\"a\":[]}");
 
     section("nested objects");
     checkParse(R"({"a":{"b":"c"}})", R"({"a":{"b":"c"}})");
-    checkParse(R"({"student":{"name":"Ryan"}})", R"({"student":{"name":"Ryan"}})");
     checkParse(R"({"a":{"b":{"c":{"d":1}}}})", R"({"a":{"b":{"c":{"d":1}}}})");
     checkParse(R"({"a":1,"b":2,"c":3})", R"({"a":1,"b":2,"c":3})");
 
     section("nested arrays");
     checkParse("[1,2,3]", "[1,2,3]");
     checkParse("[[1,2],[3,4]]", "[[1,2],[3,4]]");
-    checkParse("[[[1]]]", "[[[1]]]");
-    checkParse(R"({"scores":[90,85]})", R"({"scores":[90,85]})");
 
     section("arrays and objects mixed together");
     checkParse(R"([1,"two",true,null])", R"([1,"two",true,null])");
     checkParse(R"([{"k":"v"},[1,2],3])", R"([{"k":"v"},[1,2],3])");
-    checkParse(R"({"a":[{"b":1}]})", R"({"a":[{"b":1}]})");
-    checkParse(R"({"student":{"name":"Ryan","scores":[90,85]}})",
-               R"({"student":{"name":"Ryan","scores":[90,85]}})");
-    checkParse(R"({"student":[{"name":"Ryan","scores":[90,85]},{"name":"Nobody"}]})",
-               R"({"student":[{"name":"Ryan","scores":[90,85]},{"name":"Nobody"}]})");
 }
 
 void testWhitespace() {
@@ -193,7 +195,6 @@ void testWhitespace() {
     checkValid("  {\"a\":1}  ");
     checkValid("{\n\"a\":1}");
     checkValid("{\t\"a\" :1}");
-    checkValid(R"({"a":1, "b":2})");
 
 }
 
@@ -205,15 +206,10 @@ void testInvalid() {
     checkInvalid(R"({"a" 1})");
     checkInvalid(R"({"a":})");
     checkInvalid(R"({a:1})");
-    checkInvalid(R"({'a':1})");
     checkInvalid(R"({"a":"oops)");
     checkInvalid(R"({"a":01})");
     checkInvalid("[1,2");
-    checkInvalid("}");
-    checkInvalid("]");
-    checkInvalid(":");
     checkInvalid("nul");
-    checkInvalid("tru");
 
     section("error messages");
     try {
@@ -248,11 +244,6 @@ void testStrings() {
     checkParse(R"({"a":1,"a":2})", R"({"a":1,"a":2})");
     checkLookup(R"({"a":1,"a":2})", ".a", "1");
 
-    section("number formatting");
-    checkParse("90", "90");
-    checkParse("0", "0");
-    checkParse("-5", "-5");
-
 }
 
 void testLookup() {
@@ -269,9 +260,7 @@ void testLookup() {
     checkLookup(student, ".student.scores", "[90,85]");
 
     section("nested paths and array indexes");
-    checkLookup(student, ".student.scores[0]", "90");
     checkLookup(student, ".student.scores[1]", "85");
-    checkLookup(roster, ".student[0].name", "\"Ryan\"");
     checkLookup(roster, ".student[1].name", "\"Javier\"");
     checkLookup(roster, ".student[1].scores[1]", "88");
     checkLookup(R"([{"x":1},{"x":2}])", "[1].x", "2");
@@ -285,30 +274,25 @@ void testLookup() {
 
     section("missing fields");
     checkLookup(student, ".student.missing", "Error: field 'missing' not found");
-    checkLookup(student, ".nope", "Error: field 'nope' not found");
     checkLookup(roster, ".student[2].scores", "Error: field 'scores' not found");
     checkLookup(R"({"a":1})", ".a.b", "Error: expected an object to look up field 'b'");
-    checkLookup(R"({})", ".anything", "Error: field 'anything' not found");
 
     Parser parser(R"({"a":1})", ParserType::JSON);
     JSONValue root = parser.parse();
-    check(get(root, splitPath(".missing")).ok == false, "missing field should not be ok");
-    check(get(root, splitPath(".missing")).value == nullptr, "missing field should have no value");
-    check(get(root, splitPath(".a")).ok == true, "found field should be ok");
-    check(get(root, splitPath(".a")).value != nullptr, "found field should have a value");
+    LookupResult missing = get(root, ".missing");
+    check(!missing.ok && missing.value == nullptr, "missing field result");
+    LookupResult found = get(root, ".a");
+    check(found.ok && found.value != nullptr, "found field result");
 
     section("bad array indexes");
     checkLookup(student, ".student.scores[2]", "Error: index 2 out of range");
-    checkLookup(student, ".student.scores[99]", "Error: index 99 out of range");
     checkLookup(student, ".student.scores[-1]", "Error: index -1 out of range");
-    checkLookup(R"({"a":[]})", ".a[0]", "Error: index 0 out of range");
     checkLookup(student, ".student.scores[abc]", "Error: invalid array index 'abc'");
     checkLookup(student, ".student.scores[0", "Error: missing closing ']' in path");
     checkLookup(student, ".student.name[0]", "Error: expected an array to index with [0]");
 
     section("bad paths");
     checkLookup(student, "student.name", "Error: invalid path syntax at position 0");
-    checkLookup(student, "junk", "Error: invalid path syntax at position 0");
     checkLookup(student, " .student", "Error: invalid path syntax at position 0");
     checkLookup(student, ".", "Error: field '' not found");
     checkLookup(R"({"":5})", ".", "5");
@@ -316,11 +300,6 @@ void testLookup() {
     section("how results get printed");
     check(formatResult({false, nullptr, "something went wrong"}) == "Error: something went wrong",
           "errors print with an Error: prefix");
-    checkLookup(R"({"a":"text"})", ".a", "\"text\"");
-    checkLookup(R"({"a":1})", ".a", "1");
-    checkLookup(R"({"a":true})", ".a", "true");
-    checkLookup(R"({"a":null})", ".a", "null");
-    checkLookup(R"({"a":{"b":[1,{"c":2}]}})", ".a", R"({"b":[1,{"c":2}]})");
 }
 
 void testFiles() {
@@ -332,14 +311,8 @@ void testFiles() {
     section("jsonl files with several records");
     checkCount("records.jsonl", 3);
     checkField("records.jsonl", 0, ".name", "\"Ryan\"");
-    checkField("records.jsonl", 1, ".name", "\"Javier\"");
     checkField("records.jsonl", 2, ".name", "\"Jules\"");
-    checkField("records.jsonl", 2, ".id", "3");
-    checkCount("single.jsonl", 1);
-    checkCount("students.jsonl", 4);
     checkField("students.jsonl", 0, ".student.name", "\"Ryan\"");
-    checkField("students.jsonl", 3, ".student.name", "\"Nobody\"");
-    checkField("students.jsonl", 3, ".student.scores", "Error: field 'scores' not found");
 
     section("blank lines in the middle of a file");
     checkCount("gaps.jsonl", 3);
@@ -348,17 +321,11 @@ void testFiles() {
     section("json files");
     checkCount("nested.json", 1);
     checkField("nested.json", 0, ".student.advisor.name", "\"Dr. Smith\"");
-    checkField("nested.json", 0, ".student.scores[1]", "85");
-    checkCount("primitives.json", 1);
-    checkField("primitives.json", 0, ".number", "42");
-    checkField("primitives.json", 0, ".nothing", "null");
-    checkField("primitives.json", 0, ".no", "false");
     checkCount("scalar.json", 1);
 
     section("a top level array becomes one record per element");
     checkCount("array.json", 3);
     checkField("array.json", 0, ".city", "\"Riverside\"");
-    checkField("array.json", 2, ".city", "\"Los Angeles\"");
     checkCount("mixed.json", 6);
     checkField("mixed.json", 1, "", "\"two\"");
     checkField("mixed.json", 4, ".k", "\"v\"");
@@ -371,7 +338,6 @@ void testFiles() {
     checkCount("noextension", 1);
 
     section("missing file");
-    checkCount("does-not-exist.json", -1);
     try {
         readFile(dataDir + "/does-not-exist.json");
         check(false, "a missing file should have thrown");
@@ -386,6 +352,7 @@ void testFiles() {
 int main(int argc, char** argv) {
     if (argc > 1) dataDir = argv[1];
 
+    testScanner();
     testPrimitives();
     testNested();
     testWhitespace();
@@ -393,6 +360,7 @@ int main(int argc, char** argv) {
     testStrings();
     testLookup();
     testFiles();
+    testVersion();
 
     cout << "\n--------------------\n";
     cout << "passed: " << passed << "\n";

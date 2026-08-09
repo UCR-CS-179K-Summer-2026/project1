@@ -48,6 +48,7 @@ struct LookupResult {
 // current value is an object, or as a numeric array index when the
 // current value is an array.
 LookupResult get(const JSONValue& value, const vector<string_view>& path);
+LookupResult get(const JSONValue& value, const string& path);
 
 // Formats a LookupResult the way it should appear on the terminal,
 // e.g. strings get quotes, numbers don't, errors are readable.

@@ -169,9 +169,8 @@ LookupResult get(const JSONValue& value, const vector<string_view>& path) {
     return {true, current, ""};
 }
 
-/*
-LookupResult lookup(const JSONValue& value, const string& path) {
-    const JSONValue* current = &value;
+LookupResult get(const JSONValue& value, const string& path) {
+    vector<pair<bool, string>> parts;
     size_t i = 0;
 
     while (i < path.size()) {
@@ -179,25 +178,7 @@ LookupResult lookup(const JSONValue& value, const string& path) {
             ++i;
             size_t start = i;
             while (i < path.size() && path[i] != '.' && path[i] != '[') ++i;
-            string field = path.substr(start, i - start);
-
-            if (current->getType() != ValueType::Object) {
-                return error("expected an object to look up field '" + field + "'");
-            }
-            const auto& obj = get<ObjectValue>(current->getValue());
-
-            const JSONValue* found = nullptr;
-            for (const auto& entry : obj) {
-                if (entry.first == field) {
-                    found = &entry.second;
-                    break;
-                }
-            }
-            if (!found) {
-                return error("field '" + field + "' not found");
-            }
-            current = found;
-
+            parts.push_back({false, path.substr(start, i - start)});
         } else if (path[i] == '[') {
             ++i;
             size_t start = i;
@@ -205,34 +186,62 @@ LookupResult lookup(const JSONValue& value, const string& path) {
             if (i >= path.size()) {
                 return error("missing closing ']' in path");
             }
-            string indexStr = path.substr(start, i - start);
-            ++i;  // skip ']'
-
-            int index;
-            try {
-                index = stoi(indexStr);
-            } catch (const exception&) {
-                return error("invalid array index '" + indexStr + "'");
-            }
-
-            if (current->getType() != ValueType::Array) {
-                return error("expected an array to index with [" + indexStr + "]");
-            }
-            const auto& arr = get<ArrayValue>(current->getValue());
-
-            if (index < 0 || static_cast<size_t>(index) >= arr.size()) {
-                return error("index " + indexStr + " out of range");
-            }
-            current = &arr[static_cast<size_t>(index)];
-
+            parts.push_back({true, path.substr(start, i - start)});
+            ++i;
         } else {
             return error("invalid path syntax at position " + to_string(i));
         }
     }
 
+    const JSONValue* current = &value;
+
+    for (const auto& part : parts) {
+        const string& text = part.second;
+
+        if (!part.first) {
+            if (current->getType() != ValueType::Object) {
+                return error("expected an object to look up field '" + text + "'");
+            }
+            const auto& obj = get<ObjectValue>(current->getValue());
+
+            const JSONValue* found = nullptr;
+            for (const auto& entry : obj) {
+                if (entry.first == text) {
+                    found = &entry.second;
+                    break;
+                }
+            }
+            if (!found) {
+                return error("field '" + text + "' not found");
+            }
+            current = found;
+        } else {
+            size_t parsedLen = 0;
+
+            int index;
+            try {
+                index = stoi(text, &parsedLen);
+            } catch (const exception&) {
+                return error("invalid array index '" + text + "'");
+            }
+            if (parsedLen != text.size()) {
+                return error("invalid array index '" + text + "'");
+            }
+
+            if (current->getType() != ValueType::Array) {
+                return error("expected an array to index with [" + text + "]");
+            }
+            const auto& arr = get<ArrayValue>(current->getValue());
+
+            if (index < 0 || static_cast<size_t>(index) >= arr.size()) {
+                return error("index " + text + " out of range");
+            }
+            current = &arr[static_cast<size_t>(index)];
+        }
+    }
+
     return {true, current, ""};
 }
-*/
 string formatResult(const LookupResult& result) {
     if (!result.ok) {
         return "Error: " + result.error;
