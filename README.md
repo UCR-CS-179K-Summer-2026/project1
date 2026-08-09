@@ -99,6 +99,38 @@ If you'd rather skip the menu, the direct form still works:
 ./build/streamline week1/students.jsonl ".student.name"
 ```
 
+## Version Control
+
+The project uses version IDs to keep track of which code was used for each
+performance test. The format is `week<number>-v<number>`.
+
+- `week2-v1` is the Week 2 baseline.
+- `week2-v2` is the first optimized Week 2 version.
+- `week2-v3` is the next optimized Week 2 version.
+- `week3-v1` starts a new baseline for Week 3.
+
+The current version is stored in `week2/version.cpp`. Run this to check the
+version of the program that was built:
+
+```sh
+./build/streamline --version
+```
+
+Before measuring an optimization:
+
+1. Update the version ID in `week2/version.cpp`.
+2. Build the program in Release mode.
+3. Run the correctness tests.
+4. Run the performance tests.
+5. Save the version ID with the performance results.
+
+Every code change being measured gets a new version ID. A version ID should
+not be reused after its performance results have been saved. The performance
+log will use these IDs to compare speed changes between versions.
+
+This system labels builds for performance comparisons. Git is still used
+separately for source history, branches, and restoring old code.
+
 ## Major Features
 
 - **Get** — retrieve the value at a given path in a JSON object.  

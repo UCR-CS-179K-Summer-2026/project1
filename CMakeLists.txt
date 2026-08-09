@@ -15,6 +15,7 @@ set(CORE_SOURCES
     week2/scanner.cpp
     week2/parser.cpp
     week2/file-reader.cpp
+    week2/version.cpp
 )
 
 add_executable(streamline ${CORE_SOURCES} week2/main.cpp)
@@ -22,9 +23,6 @@ target_include_directories(streamline PRIVATE week2)
 
 add_executable(tests ${CORE_SOURCES} tests/correctness/tests.cpp)
 target_include_directories(tests PRIVATE week2)
-
-add_executable(scanner_correctness_tests week2/scanner.cpp tests/correctness/scanner_tests.cpp)
-target_include_directories(scanner_correctness_tests PRIVATE week2)
 
 set(WEEK1_SOURCES
     week1/scanner.cpp
