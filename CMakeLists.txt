@@ -20,5 +20,11 @@ set(CORE_SOURCES
 add_executable(sluice ${CORE_SOURCES} week2/main.cpp)
 target_include_directories(sluice PRIVATE week2)
 
-add_executable(tests ${CORE_SOURCES} tests/tests.cpp)
+add_executable(tests ${CORE_SOURCES} tests/correctness/tests.cpp)
 target_include_directories(tests PRIVATE week2)
+
+add_executable(scanner_correctness_tests week2/scanner.cpp tests/correctness/scanner_tests.cpp)
+target_include_directories(scanner_correctness_tests PRIVATE week2)
+
+add_executable(w1tests ${CORE_SOURCES} week1/main.cpp)
+target_include_directories(w1tests PRIVATE week1)
