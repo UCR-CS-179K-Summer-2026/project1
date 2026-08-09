@@ -1,0 +1,12 @@
+{
+    "name": "Alice",
+    ".": "Bob",
+    "\"": "Charlie",
+    "\u0061": "David",
+}
+
+
+// unicode after string should display actual character. -  bob\uA7A*  =bobe 65A has to convert to hex
+
+//null byte /0 often treated as stop 
+
