@@ -62,10 +62,34 @@ void checkInvalid(const string& text) {
     check(!parses(text), "should have been rejected: " + text);
 }
 
+// Splits a dotted/bracketed path like ".student.scores[0]" into the
+// segments get() expects, e.g. {"student", "scores", "0"}.
+vector<string_view> splitPath(const string& path) {
+    vector<string_view> segments;
+    size_t i = 0;
+    while (i < path.size()) {
+        if (path[i] == '.') {
+            i++;
+            size_t start = i;
+            while (i < path.size() && path[i] != '.' && path[i] != '[') i++;
+            segments.push_back(string_view(path).substr(start, i - start));
+        } else if (path[i] == '[') {
+            i++;
+            size_t start = i;
+            while (i < path.size() && path[i] != ']') i++;
+            segments.push_back(string_view(path).substr(start, i - start));
+            if (i < path.size()) i++;  // skip ']'
+        } else {
+            i++;  // skip an unexpected character rather than getting stuck
+        }
+    }
+    return segments;
+}
+
 void checkLookup(const string& text, const string& path, const string& want) {
     Parser parser(text, ParserType::JSON);
     JSONValue value = parser.parse();
-    string got = formatResult(lookup(value, path));
+    string got = formatResult(get(value, splitPath(path)));
     if (got == want) {
         passed++;
     } else {
@@ -96,7 +120,7 @@ void checkCount(const string& file, int want) {
 
 void checkField(const string& file, size_t index, const string& path, const string& want) {
     vector<JSONValue> records = readFile(dataDir + "/" + file);
-    string got = index < records.size() ? formatResult(lookup(records[index], path)) : "<no record>";
+    string got = index < records.size() ? formatResult(get(records[index], splitPath(path))) : "<no record>";
     if (got == want) {
         passed++;
     } else {
@@ -268,10 +292,10 @@ void testLookup() {
 
     Parser parser(R"({"a":1})", ParserType::JSON);
     JSONValue root = parser.parse();
-    check(lookup(root, ".missing").ok == false, "missing field should not be ok");
-    check(lookup(root, ".missing").value == nullptr, "missing field should have no value");
-    check(lookup(root, ".a").ok == true, "found field should be ok");
-    check(lookup(root, ".a").value != nullptr, "found field should have a value");
+    check(get(root, splitPath(".missing")).ok == false, "missing field should not be ok");
+    check(get(root, splitPath(".missing")).value == nullptr, "missing field should have no value");
+    check(get(root, splitPath(".a")).ok == true, "found field should be ok");
+    check(get(root, splitPath(".a")).value != nullptr, "found field should have a value");
 
     section("bad array indexes");
     checkLookup(student, ".student.scores[2]", "Error: index 2 out of range");

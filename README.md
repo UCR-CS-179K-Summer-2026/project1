@@ -33,11 +33,11 @@ cmake -B build
 cmake --build build
 ```
 
-That produces two binaries in `build/`: `sluice` (the CLI) and `tests`
+That produces two binaries in `build/`: `streamline` (the CLI) and `tests`
 (the test suite). Run both from the repo root:
 
 ```sh
-./build/sluice        # opens the menu
+./build/streamline        # opens the menu
 ./build/tests         # runs the test suite
 ```
 
@@ -96,7 +96,7 @@ can't be opened or parsed just asks you for another one.
 If you'd rather skip the menu, the direct form still works:
 
 ```sh
-./build/sluice week1/students.jsonl ".student.name"
+./build/streamline week1/students.jsonl ".student.name"
 ```
 
 ## Major Features

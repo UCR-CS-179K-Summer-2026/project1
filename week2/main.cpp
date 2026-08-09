@@ -1,10 +1,5 @@
-// The sluice command line tool. Reads a JSON/JSONL file and runs a lookup
-// on every record in it.
-//
-// Build:
-//   g++ -std=c++17 -Wall -Wextra scanner.cpp parser.cpp file-reader.cpp main.cpp -o sluice
-// Run:
-//   ./sluice students.jsonl ".student.name"
+// The Streamline command line tool. Reads a JSON/JSONL file and runs a
+// lookup on every record in it. See the README for how to build and run it.
 #include <algorithm>
 #include <iostream>
 
@@ -13,20 +8,19 @@
 const int BOX_WIDTH = 37;
 
 void printUsage() {
-    cout << "usage: sluice <file.json|file.jsonl> \"<lookup expression>\"\n"
-         << "       sluice students.jsonl \".student.name\"\n\n"
-         << "run sluice with no arguments to open the menu\n\n"
+    cout << "usage: streamline <file.json|file.jsonl> \"<lookup expression>\"\n"
+         << "       streamline students.jsonl \".student.name\"\n\n"
+         << "run streamline with no arguments to open the menu\n\n"
          << "lookup expressions look like .name, .student.name, or .scores[0]\n";
 }
 
 void printBanner() {
     cout << "\n"
          << "        W E L C O M E   T O\n"
-         << "     ██ ███████  ██████  ███    ██\n"
-         << "     ██ ██      ██    ██ ████   ██\n"
-         << "     ██ ███████ ██    ██ ██ ██  ██\n"
-         << "██   ██      ██ ██    ██ ██  ██ ██\n"
-         << " █████  ███████  ██████  ██   ████\n"
+         << "▄▀▀▀▀ ▀▀█▀▀ █▀▀▀▄ █▀▀▀▀ ▄▀▀▀▄ █▄ ▄█ █     ▀█▀ █▄  █ █▀▀▀▀\n"
+         << "▀▄▄▄    █   █▄▄▄▀ █▄▄▄  █   █ █ █ █ █      █  █ █ █ █▄▄▄ \n"
+         << "    █   █   █ ▀▄  █     █▀▀▀█ █   █ █      █  █  ▀█ █    \n"
+         << "▀▄▄▄▀   █   █  ▀▄ █▄▄▄▄ █   █ █   █ █▄▄▄▄ ▄█▄ █   █ █▄▄▄▄\n"
          << "\n"
          << "     by Javier, Jules and Ryan\n";
 }
@@ -51,10 +45,10 @@ void printMenu() {
     cout << "\n";
     printBoxBorder("┌", "┐");
     printBoxLine("  MENU");
-    printBoxLine("    \\u   upload a .json/.jsonl file");
-    printBoxLine("    \\s   search & query your file");
-    printBoxLine("    \\m   view this menu");
-    printBoxLine("    \\q   quit");
+    printBoxLine("    u   upload a .json/.jsonl file");
+    printBoxLine("    s   search & query your file");
+    printBoxLine("    m   view this menu");
+    printBoxLine("    q   quit");
     printBoxBorder("└", "┘");
     cout << "\n";
 }
@@ -132,7 +126,7 @@ bool doUpload(Session& session) {
         try {
             records = readFile(path);
         } catch (const exception& e) {
-            cout << "sluice: " << e.what() << "\n";
+            cout << "streamline: " << e.what() << "\n";
             continue;
         }
 
@@ -152,8 +146,32 @@ bool doUpload(Session& session) {
     }
 }
 
+// Splits a dotted/bracketed path like ".student.scores[0]" into the
+// segments get() expects, e.g. {"student", "scores", "0"}.
+vector<string_view> splitPath(const string& path) {
+    vector<string_view> segments;
+    size_t i = 0;
+    while (i < path.size()) {
+        if (path[i] == '.') {
+            i++;
+            size_t start = i;
+            while (i < path.size() && path[i] != '.' && path[i] != '[') i++;
+            segments.push_back(string_view(path).substr(start, i - start));
+        } else if (path[i] == '[') {
+            i++;
+            size_t start = i;
+            while (i < path.size() && path[i] != ']') i++;
+            segments.push_back(string_view(path).substr(start, i - start));
+            if (i < path.size()) i++;  // skip ']'
+        } else {
+            i++;  // skip an unexpected character rather than getting stuck
+        }
+    }
+    return segments;
+}
+
 void printLookup(const JSONValue& record, const string& query) {
-    LookupResult result = lookup(record, query);
+    LookupResult result = get(record, splitPath(query));
 
     if (result.ok && result.value->getType() == ValueType::String) {
         cout << get<string>(result.value->getValue()) << "\n";
@@ -214,7 +232,7 @@ void runInteractive() {
                 break;
             }
         } else {
-            cout << "Unknown command. Enter \\m to view the menu.\n";
+            cout << "Unknown command. Enter m to view the menu.\n";
         }
     }
 
@@ -240,7 +258,7 @@ int main(int argc, char** argv) {
     }
 
     if (args.size() != 2) {
-        cout << "sluice: need a file and a lookup expression\n\n";
+        cout << "streamline: need a file and a lookup expression\n\n";
         printUsage();
         return 1;
     }
@@ -252,12 +270,12 @@ int main(int argc, char** argv) {
     try {
         records = readFile(path);
     } catch (const exception& e) {
-        cout << "sluice: " << e.what() << "\n";
+        cout << "streamline: " << e.what() << "\n";
         return 1;
     }
 
     if (records.empty()) {
-        cout << "sluice: no records in " << path << "\n";
+        cout << "streamline: no records in " << path << "\n";
         return 1;
     }
 

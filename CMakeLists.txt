@@ -17,8 +17,8 @@ set(CORE_SOURCES
     week2/file-reader.cpp
 )
 
-add_executable(sluice ${CORE_SOURCES} week2/main.cpp)
-target_include_directories(sluice PRIVATE week2)
+add_executable(streamline ${CORE_SOURCES} week2/main.cpp)
+target_include_directories(streamline PRIVATE week2)
 
 add_executable(tests ${CORE_SOURCES} tests/correctness/tests.cpp)
 target_include_directories(tests PRIVATE week2)
@@ -26,5 +26,11 @@ target_include_directories(tests PRIVATE week2)
 add_executable(scanner_correctness_tests week2/scanner.cpp tests/correctness/scanner_tests.cpp)
 target_include_directories(scanner_correctness_tests PRIVATE week2)
 
-add_executable(w1tests ${CORE_SOURCES} week1/main.cpp)
+set(WEEK1_SOURCES
+    week1/scanner.cpp
+    week1/parser.cpp
+    week1/file-reader.cpp
+)
+
+add_executable(w1tests ${WEEK1_SOURCES} week1/main.cpp)
 target_include_directories(w1tests PRIVATE week1)
