@@ -28,6 +28,15 @@ C++
 
 Requires CMake 3.16+ and a C++17 compiler.
 
+On macOS, install Readline for arrow-key history and command editing:
+
+```sh
+brew install readline
+```
+
+The CLI still builds without Readline, but uses basic line input instead.
+Use `Command+V` to paste in a macOS terminal.
+
 ```sh
 cmake -B build
 cmake --build build
