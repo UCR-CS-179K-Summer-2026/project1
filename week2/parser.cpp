@@ -4,12 +4,12 @@
 
 JSONValue Parser::parse() {
     switch(currToken.type) {
-        case TokenType::LBrace: {
+        case JSONTokenType::LBrace: {
             vector<pair<string, JSONValue>> object;
             currToken = scanner.scan();
 
-            while(currToken.type != TokenType::RBrace) {
-                if(currToken.type != TokenType::String) {
+            while(currToken.type != JSONTokenType::RBrace) {
+                if(currToken.type != JSONTokenType::String) {
                     if(fileType == ParserType::JSON) {
                         throw runtime_error("Warning: line " + to_string(scanner.getLineNumber()) + " failed to parse");
                     } else {
@@ -19,7 +19,7 @@ JSONValue Parser::parse() {
                 string key(currToken.value);
                 currToken = scanner.scan();
 
-                if(currToken.type != TokenType::Colon) {
+                if(currToken.type != JSONTokenType::Colon) {
                     if(fileType == ParserType::JSON) {
                         throw runtime_error("Warning: line " + to_string(scanner.getLineNumber()) + " failed to parse");
                     } else {
@@ -31,9 +31,9 @@ JSONValue Parser::parse() {
                 JSONValue value = parse();
                 object.emplace_back(move(key), move(value));
 
-                if(currToken.type == TokenType::Comma) {
+                if(currToken.type == JSONTokenType::Comma) {
                     currToken = scanner.scan();
-                } else if(currToken.type != TokenType::RBrace) {
+                } else if(currToken.type != JSONTokenType::RBrace) {
                     if(fileType == ParserType::JSON) {
                         throw runtime_error("Warning: line " + to_string(scanner.getLineNumber()) + " failed to parse");
                     } else {
@@ -45,16 +45,16 @@ JSONValue Parser::parse() {
             return JSONValue(move(object));
         }
 
-        case TokenType::LBracket: {
+        case JSONTokenType::LBracket: {
             vector<JSONValue> array;
             currToken = scanner.scan();
 
-            while(currToken.type != TokenType::RBracket) {
+            while(currToken.type != JSONTokenType::RBracket) {
                 array.push_back(parse());
 
-                if(currToken.type == TokenType::Comma) {
+                if(currToken.type == JSONTokenType::Comma) {
                     currToken = scanner.scan();
-                } else if(currToken.type != TokenType::RBracket) {
+                } else if(currToken.type != JSONTokenType::RBracket) {
                     if(fileType == ParserType::JSON) {
                         throw runtime_error("Warning: line " + to_string(scanner.getLineNumber()) + " failed to parse");
                     } else {
@@ -66,25 +66,25 @@ JSONValue Parser::parse() {
             return JSONValue(move(array));
         }
 
-        case TokenType::String: {
+        case JSONTokenType::String: {
             string str(currToken.value);
             currToken = scanner.scan();
             return JSONValue(move(str));
         }
 
-        case TokenType::Number: {
+        case JSONTokenType::Number: {
             double num = stod(string(currToken.value));
             currToken = scanner.scan();
             return JSONValue(num);
         }
 
-        case TokenType::Boolean: {
+        case JSONTokenType::Boolean: {
             bool b = (currToken.value == "true");
             currToken = scanner.scan();
             return JSONValue(b);
         }
 
-        case TokenType::Null: {
+        case JSONTokenType::Null: {
             currToken = scanner.scan();
             return JSONValue(nullptr);
         }

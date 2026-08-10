@@ -53,9 +53,37 @@ inline string unescapeString(const string_view& str) {
                 case 'u':
                     if (i + 4 < str.size()) {
                         string hex = string(str.substr(i + 1, 4));
-                        char16_t codePoint = static_cast<char16_t>(stoi(hex, nullptr, 16));
-                        result += static_cast<char>(codePoint);
+                        uint32_t codePoint = static_cast<uint32_t>(stoul(hex, nullptr, 16));
                         i += 4;
+
+                        // High surrogate followed by a low surrogate: combine into one code point
+                        if (codePoint >= 0xD800 && codePoint <= 0xDBFF &&
+                            i + 6 < str.size() && str[i + 1] == '\\' && str[i + 2] == 'u') {
+                            string lowHex = string(str.substr(i + 3, 4));
+                            uint32_t low = static_cast<uint32_t>(stoul(lowHex, nullptr, 16));
+
+                            if (low >= 0xDC00 && low <= 0xDFFF) {
+                                codePoint = 0x10000 + ((codePoint - 0xD800) << 10) + (low - 0xDC00);
+                                i += 6;
+                            }
+                        }
+
+                        // Encode the code point as UTF-8
+                        if (codePoint <= 0x7F) {
+                            result += static_cast<char>(codePoint);
+                        } else if (codePoint <= 0x7FF) {
+                            result += static_cast<char>(0xC0 | (codePoint >> 6));
+                            result += static_cast<char>(0x80 | (codePoint & 0x3F));
+                        } else if (codePoint <= 0xFFFF) {
+                            result += static_cast<char>(0xE0 | (codePoint >> 12));
+                            result += static_cast<char>(0x80 | ((codePoint >> 6) & 0x3F));
+                            result += static_cast<char>(0x80 | (codePoint & 0x3F));
+                        } else {
+                            result += static_cast<char>(0xF0 | (codePoint >> 18));
+                            result += static_cast<char>(0x80 | ((codePoint >> 12) & 0x3F));
+                            result += static_cast<char>(0x80 | ((codePoint >> 6) & 0x3F));
+                            result += static_cast<char>(0x80 | (codePoint & 0x3F));
+                        }
                     }
 
                     break;

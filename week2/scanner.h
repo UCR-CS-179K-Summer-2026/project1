@@ -1,5 +1,5 @@
 // This file is meant to define the Scanner class, which is responsible for scanning a JSON or JSONL string and producing a sequence of tokens.
-// It also defines the TokenType enum to represent the type of a token, and the Token struct to hold a token's type and value.
+// It also defines the JSONTokenType enum to represent the type of a token, and the Token struct to hold a token's type and value.
 #pragma once
 
 #include <cstdint>
@@ -10,14 +10,18 @@
 
 using namespace std;
 
-enum class TokenType : uint8_t {Boolean, Colon, Comma, End, LBrace, LBracket, Null, Number, RBrace, RBracket, String};
+// Named JSONTokenType (not TokenType) because <windows.h> declares an
+// unscoped enum whose first enumerator is literally `TokenType` (from
+// TOKEN_INFORMATION_CLASS in winnt.h), which collides with that name in the
+// global namespace once windows.h is included anywhere in the same TU.
+enum class JSONTokenType : uint8_t {Boolean, Colon, Comma, End, LBrace, LBracket, Null, Number, RBrace, RBracket, String};
 enum class ParserType {JSONL, JSON};
 
 struct Token {
-    TokenType type;
+    JSONTokenType type;
     string_view value;
 
-    Token(TokenType t, string_view v) : type(t), value(v) {}
+    Token(JSONTokenType t, string_view v) : type(t), value(v) {}
 };
 
 class Scanner {

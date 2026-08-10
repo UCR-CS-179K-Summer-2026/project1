@@ -12,32 +12,32 @@ Token Scanner::scan() {
     }
 
     if(curr >= end) {
-        return Token(TokenType::End, {});
+        return Token(JSONTokenType::End, {});
     }
 
     if(*curr == '{') {
         curr++;
-        return Token(TokenType::LBrace, "{");
+        return Token(JSONTokenType::LBrace, "{");
     }
     if(*curr == '}') {
         curr++;
-        return Token(TokenType::RBrace, "}");
+        return Token(JSONTokenType::RBrace, "}");
     }
     if(*curr == '[') {
         curr++;
-        return Token(TokenType::LBracket, "[");
+        return Token(JSONTokenType::LBracket, "[");
     }
     if(*curr == ']') {
         curr++;
-        return Token(TokenType::RBracket, "]");
+        return Token(JSONTokenType::RBracket, "]");
     }
     if(*curr == ':') {
         curr++;
-        return Token(TokenType::Colon, ":");
+        return Token(JSONTokenType::Colon, ":");
     }
     if(*curr == ',') {
         curr++;
-        return Token(TokenType::Comma, ",");
+        return Token(JSONTokenType::Comma, ",");
     }
 
     if(*curr == '\"') {
@@ -77,22 +77,22 @@ Token Scanner::scan() {
 
         string_view str(stringBegin, curr - stringBegin);
         curr++;  // skip closing quote
-        return Token(TokenType::String, str);
+        return Token(JSONTokenType::String, str);
     }
 
     if(*curr == 't' && curr + 3 < end && *(curr + 1) == 'r' && *(curr + 2) == 'u' && *(curr + 3) == 'e') {
         curr += 4;
-        return Token(TokenType::Boolean, "true");
+        return Token(JSONTokenType::Boolean, "true");
     }
 
     if(*curr == 'f' && curr + 4 < end && *(curr + 1) == 'a' && *(curr + 2) == 'l' && *(curr + 3) == 's' && *(curr + 4) == 'e') {
         curr += 5;
-        return Token(TokenType::Boolean, "false");
+        return Token(JSONTokenType::Boolean, "false");
     }
 
     if(*curr == 'n' && curr + 3 < end && *(curr + 1) == 'u' && *(curr + 2) == 'l' && *(curr + 3) == 'l') {
         curr += 4;
-        return Token(TokenType::Null, "null");
+        return Token(JSONTokenType::Null, "null");
     }
 
     if((*curr >= '0' && *curr <= '9') || *curr == '-') {
@@ -108,7 +108,7 @@ Token Scanner::scan() {
 
         if(regex_match(str, pattern)) {
             string_view num(numberBegin, curr - numberBegin);
-            return Token(TokenType::Number, num);
+            return Token(JSONTokenType::Number, num);
         }
     }
 

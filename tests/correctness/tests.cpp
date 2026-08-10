@@ -29,7 +29,7 @@ void check(bool ok, const string& label) {
     }
 }
 
-void checkScannerToken(Scanner& scanner, TokenType type, const string& value, const string& name) {
+void checkScannerToken(Scanner& scanner, JSONTokenType type, const string& value, const string& name) {
     Token token = scanner.scan();
     check(token.type == type && token.value == value, name);
 }
@@ -51,21 +51,21 @@ void testScanner() {
     section("scanner");
 
     Scanner scanner(R"({}[]:,"name" true false null -12.5)", ParserType::JSON);
-    checkScannerToken(scanner, TokenType::LBrace, "{", "left brace");
-    checkScannerToken(scanner, TokenType::RBrace, "}", "right brace");
-    checkScannerToken(scanner, TokenType::LBracket, "[", "left bracket");
-    checkScannerToken(scanner, TokenType::RBracket, "]", "right bracket");
-    checkScannerToken(scanner, TokenType::Colon, ":", "colon");
-    checkScannerToken(scanner, TokenType::Comma, ",", "comma");
-    checkScannerToken(scanner, TokenType::String, "name", "string");
-    checkScannerToken(scanner, TokenType::Boolean, "true", "true");
-    checkScannerToken(scanner, TokenType::Boolean, "false", "false");
-    checkScannerToken(scanner, TokenType::Null, "null", "null");
-    checkScannerToken(scanner, TokenType::Number, "-12.5", "number");
-    checkScannerToken(scanner, TokenType::End, "", "end");
+    checkScannerToken(scanner, JSONTokenType::LBrace, "{", "left brace");
+    checkScannerToken(scanner, JSONTokenType::RBrace, "}", "right brace");
+    checkScannerToken(scanner, JSONTokenType::LBracket, "[", "left bracket");
+    checkScannerToken(scanner, JSONTokenType::RBracket, "]", "right bracket");
+    checkScannerToken(scanner, JSONTokenType::Colon, ":", "colon");
+    checkScannerToken(scanner, JSONTokenType::Comma, ",", "comma");
+    checkScannerToken(scanner, JSONTokenType::String, "name", "string");
+    checkScannerToken(scanner, JSONTokenType::Boolean, "true", "true");
+    checkScannerToken(scanner, JSONTokenType::Boolean, "false", "false");
+    checkScannerToken(scanner, JSONTokenType::Null, "null", "null");
+    checkScannerToken(scanner, JSONTokenType::Number, "-12.5", "number");
+    checkScannerToken(scanner, JSONTokenType::End, "", "end");
 
     Scanner whitespaceScanner("\n\n true", ParserType::JSON);
-    checkScannerToken(whitespaceScanner, TokenType::Boolean, "true", "whitespace");
+    checkScannerToken(whitespaceScanner, JSONTokenType::Boolean, "true", "whitespace");
     check(whitespaceScanner.getLineNumber() == 3, "line number");
 
     checkScannerThrows("@", "invalid character");

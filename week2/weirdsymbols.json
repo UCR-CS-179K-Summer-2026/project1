@@ -3,11 +3,11 @@
     ".": "Bob",
     "\"": "Charlie",
     "\u0061": "David",
+    "🐘": "Emma",
+    "arr": [
+        {"a": "\uD83C\uDF39"},
+        {"a": "x"},
+        {"a": "x"},
+        {"a": "hello\u0000world"}
+    ] 
 }
-
-
-// unicode after string should display actual character. - [create test bob\uA7A*  =bobe 65A has to convert to hex
-
-//null byte /0 often treated as stop 
-
-//emoji [ryan create test]

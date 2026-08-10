@@ -1,5 +1,9 @@
 // The Streamline command line tool. Reads a JSON/JSONL file and runs a
 // lookup on every record in it. See the README for how to build and run it.
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include <algorithm>
 #include <iostream>
 
@@ -23,6 +27,11 @@ string normalizeCommand(const string& input);
 bool promptLine(const string& label, string& line);
 
 int main(int argc, char** argv) {
+    #ifdef _WIN32
+    SetConsoleCP(65001);
+    SetConsoleOutputCP(65001);
+    #endif
+
     vector<string> args;
 
     for (int i = 1; i < argc; i++) {

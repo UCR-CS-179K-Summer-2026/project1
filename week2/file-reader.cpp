@@ -24,7 +24,7 @@ bool valuesEqual(const JSONValue& lhs, const JSONValue& rhs) {
         case ValueType::Number:
             return get<double>(lhs.getValue()) == get<double>(rhs.getValue());
         case ValueType::String:
-            return get<string>(lhs.getValue()) == get<string>(rhs.getValue());
+            return unescapeString(get<string>(lhs.getValue())) == unescapeString(get<string>(rhs.getValue()));
         default:
             return false;  // arrays/objects: not a supported comparison
     }
