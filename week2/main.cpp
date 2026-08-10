@@ -6,15 +6,23 @@
 
 #include <algorithm>
 #include <iostream>
+#include <utility>
 
 using namespace std;
 
 #include "file-reader.h"
+#include "integration.h"
 #include "session.h"
 #include "version.h"
 
-bool doUpload(Session& session);
-bool doSearch(Session& session);
+struct CliState {
+    Session session;
+    string name;
+    size_t recordCount = 0;
+};
+
+bool doUpload(CliState& state);
+bool doSearch(CliState& state);
 void runInteractive();
 void printUsage();
 void printBanner();
@@ -27,10 +35,10 @@ string normalizeCommand(const string& input);
 bool promptLine(const string& label, string& line);
 
 int main(int argc, char** argv) {
-    #ifdef _WIN32
+#ifdef _WIN32
     SetConsoleCP(65001);
     SetConsoleOutputCP(65001);
-    #endif
+#endif
 
     vector<string> args;
 
@@ -53,36 +61,24 @@ int main(int argc, char** argv) {
     }
 
     if (args.size() != 2) {
-        cout << "streamline: need a file and a lookup expression\n\n";
+        cout << "streamline: need a file and a query\n\n";
         printUsage();
         return 1;
     }
 
-    string path = args[0];
-    string query = args[1];
-    /*
-    vector<JSONValue> records;
+    CliState state;
     try {
-        records = readFile(path);
+        loadSessionFile(args[0], state.session, state.name, state.recordCount);
+        cout << excecuteQuery(state.session, args[1]) << "\n";
     } catch (const exception& e) {
         cout << "streamline: " << e.what() << "\n";
         return 1;
     }
 
-    if (records.empty()) {
-        cout << "streamline: no records in " << path << "\n";
-        return 1;
-    }
-
-    for (const auto& record : records) {
-        printLookup(record, query);
-    }
-    */
     return 0;
 }
 
-
-bool doUpload(Session& session) {
+bool doUpload(CliState& state) {
     string path;
     while (true) {
         if (!promptLine("Enter path to your file: ", path)) {
@@ -92,14 +88,24 @@ bool doUpload(Session& session) {
             return true;
         }
 
-        uploadFile(path, session);
+        CliState uploaded;
+        try {
+            loadSessionFile(path, uploaded.session, uploaded.name, uploaded.recordCount);
+        } catch (const exception& e) {
+            cout << "streamline: " << e.what() << "\n";
+            continue;
+        }
 
+        state = std::move(uploaded);
+        cout << "File " << state.name << " uploaded successfully. ("
+             << state.recordCount
+             << (state.recordCount == 1 ? " record)\n" : " records)\n");
         return true;
     }
 }
 
-bool doSearch(Session& session) {
-    if (!session.isInitialized) {
+bool doSearch(CliState& state) {
+    if (!state.session.isInitialized) {
         cout << "Please upload a file first\n";
         printMenu();
         return true;
@@ -113,9 +119,11 @@ bool doSearch(Session& session) {
         return true;
     }
 
-    string result = excecuteQuery(session, query);
-    cout << result << endl;
-
+    try {
+        cout << excecuteQuery(state.session, query) << "\n";
+    } catch (const exception& e) {
+        cout << "streamline: " << e.what() << "\n";
+    }
     return true;
 }
 
@@ -123,12 +131,11 @@ void runInteractive() {
     printBanner();
     printMenu();
 
-    Session session;
+    CliState state;
     string input;
 
     while (true) {
-        //string prompt = session.loaded ? "[" + session.name + "] > " : "> ";
-        string prompt = "> ";
+        string prompt = state.session.isInitialized ? "[" + state.name + "] > " : "> ";
         if (!promptLine(prompt, input)) {
             break;
         }
@@ -143,15 +150,15 @@ void runInteractive() {
         } else if (command == "m" || command == "menu") {
             printMenu();
         } else if (command == "u" || command == "upload") {
-            if (!doUpload(session)) {
+            if (!doUpload(state)) {
                 break;
             }
         } else if (command == "s" || command == "search") {
-            if (!doSearch(session)) {
+            if (!doSearch(state)) {
                 break;
             }
         } else {
-            cout << "Unknown command. Enter \\m to view the menu.\n";
+            cout << "Unknown command. Enter m to view the menu.\n";
         }
     }
 
@@ -161,11 +168,10 @@ void runInteractive() {
 const int BOX_WIDTH = 37;
 
 void printUsage() {
-    cout << "usage: streamline <file.json|file.jsonl> \"<lookup expression>\"\n"
-         << "       streamline students.jsonl \".student.name\"\n\n"
+    cout << "usage: streamline <file.json|file.jsonl> \"<query>\"\n"
+         << "       streamline students.json \"FILTER(GET(\\\"gpa\\\") > 3.5) | LIMIT(5)\"\n\n"
          << "       streamline --version\n\n"
-         << "run streamline with no arguments to open the menu\n\n"
-         << "lookup expressions look like .name, .student.name, or .scores[0]\n";
+         << "run streamline with no arguments to open the menu\n";
 }
 
 void printBanner() {

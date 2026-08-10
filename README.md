@@ -33,12 +33,14 @@ cmake -B build
 cmake --build build
 ```
 
-That produces two binaries in `build/`: `streamline` (the CLI) and `tests`
-(the test suite). Run both from the repo root:
+The main binaries in `build/` are `streamline` (the CLI), `tests` (the
+correctness suite), and `benchmark` (the performance benchmark). Run them
+from the repo root.
 
 ```sh
 ./build/streamline        # opens the menu
-./build/tests         # runs the test suite
+./build/tests             # runs the test suite
+./build/benchmark         # runs the performance benchmark
 ```
 
 The test suite reads its sample files from `tests/data`, and that path is
@@ -57,47 +59,29 @@ Start it with no arguments and you get a menu:
 
 | Command | What it does                    |
 | ------- | ------------------------------- |
-| `\u`    | upload a `.json`/`.jsonl` file  |
-| `\s`    | search & query the loaded file  |
-| `\m`    | show the menu again             |
-| `\q`    | quit                            |
+| `u`     | upload a `.json`/`.jsonl` file  |
+| `s`     | search & query the loaded file  |
+| `m`     | show the menu again             |
+| `q`     | quit                            |
 
 Upload a file once and you can run as many queries against it as you want
-— the records stay loaded, so `\s` doesn't re-read the file each time. The
-prompt shows which file you're working on.
+— the records stay loaded, so `s` doesn't re-read the file each time.
 
 ```
-> \u
-Enter path to your file: week1/students.jsonl
-File students.jsonl uploaded successfully. (4 records)
-[students.jsonl] > \s
-Enter your search query: .student.name
-Ryan
-Javier
-Jules
-Nobody
-[students.jsonl] > \s
-Enter your search query: .student.scores[0]
-90
+> u
+Enter path to your file: week1/students.json
+> s
+Enter your search query: GET("student", 0, "name")
+"Ryan"
+> s
+Enter your search query: GET("student", 1, "scores", 0)
 95
-92
-Error: field 'scores' not found
-[students.jsonl] > \q
+> q
 Thanks for choosing our program!
 ```
 
-The query runs against every record in the file, so you get one line of
-output per record. A record that doesn't have the field you asked for
-reports an error on its own line instead of stopping the whole query.
-
-Anything that isn't a `.json` or `.jsonl` file is rejected, and a path that
-can't be opened or parsed just asks you for another one.
-
-If you'd rather skip the menu, the direct form still works:
-
-```sh
-./build/streamline week1/students.jsonl ".student.name"
-```
+`GET` takes field names and array indexes in the order they should be
+followed. Other operations can be joined with `|` to form a query pipeline.
 
 ## Version Control
 
@@ -118,7 +102,8 @@ version of the program that was built:
 
 Before measuring an optimization:
 
-1. Update the version ID in `week2/version.cpp`.
+1. Update the version ID in `week2/version.cpp` and its expected value in
+   `tests/correctness/tests.cpp`.
 2. Build the program in Release mode.
 3. Run the correctness tests.
 4. Run the performance tests.
@@ -130,6 +115,35 @@ log will use these IDs to compare speed changes between versions.
 
 This system labels builds for performance comparisons. Git is still used
 separately for source history, branches, and restoring old code.
+
+## Benchmark
+
+The Week 2 benchmark uses `json/students.json`, which is a 50 MB file with
+85,032 records. It loads the file and runs `.courses[0].grade` on every
+record.
+
+Build in Release mode and run the correctness tests first:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+./build/tests tests/data
+```
+
+Run the benchmark from the repository root:
+
+```sh
+./build/benchmark
+```
+
+The first run is a warm-up and is not recorded. The next five runs are
+printed as CSV, followed by the run with the median total time. Each row
+contains the version, dataset, query, run number, record count, load time,
+lookup time, and total time in milliseconds.
+
+The benchmark stops without recording results unless all 85,032 records load
+and all 85,032 lookups succeed. Use the median row when comparing versions.
+Results from different versions should use the same computer and dataset.
 
 ## Major Features
 
@@ -148,9 +162,9 @@ The input is a boolean expression containing one or more path and the output is 
     Result: `[{"a": 2, "b": 2}]`
 
 - **Sort** — order an array of records by a field, ascending or descending.  
-The input is two arguments: a key name and the direction. The output is a sorted array.
+The input is a `GET` target and either `ASC` or `DESC`. The output is a sorted array.
 
-    Query: `SORT("a", asc)`
+    Query: `SORT(GET("a"), ASC)`
     JSON: `[{"a": 1, "b": 2}, {"a": 0, "b": 3}]`
     Result: `[{"a": 0, "b": 3}, {"a": 1, "b": 2}]`
 
@@ -159,7 +173,7 @@ The input is a number N and the output is an array of size N.
 
     Query: `LIMIT(1)`
     JSON: `[{"a": 1, "b": 2}, {"a": 0, "b": 3}]`
-    Result: `{"a": 1, "b": 2}`
+    Result: `[{"a": 1, "b": 2}]`
 
 - **GroupBy** — bucket records by the value of a field.  
 The input is a path and the output is an array with different properties as key, and an array with all items having that property as value.
