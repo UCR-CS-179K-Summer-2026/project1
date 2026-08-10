@@ -1,0 +1,13 @@
+{
+    "name": "Alice",
+    ".": "Bob",
+    "\"": "Charlie",
+    "\u0061": "David",
+    "🐘": "Emma",
+    "arr": [
+        {"a": "\uD83C\uDF39"},
+        {"a": "x"},
+        {"a": "x"},
+        {"a": "hello\u0000world"}
+    ] 
+}

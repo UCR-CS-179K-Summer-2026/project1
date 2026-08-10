@@ -1,4 +1,4 @@
-# JSON/JSONL Parser
+# Streamline - A JSON/JSONL Parser
 
 ## Purpose & Function
 
@@ -12,7 +12,7 @@ records: getting a field, filtering, sorting, limiting, grouping, and
 aggregating with possibly more to come!
 
 Design details (system architecture, module interfaces, and algorithms) are
-documented on our [project design page](https://ucr-cs-179k-summer-2026.github.io/project1/).
+documented on our [project design page](https://ucr-cs-179k-summer-2026.github.io/project1/) if any future developers want to contribute to this project.
 
 ## Team
 
@@ -47,12 +47,6 @@ The test suite reads its sample files from `tests/data`, and that path is
 resolved against your current directory — so run it from the repo root, or
 pass the directory yourself with `./build/tests path/to/tests/data`.
 
-`CMakeLists.txt` lives at the repo root and builds from `week2/` (Sprint
-2's code) — it gets repointed at whichever folder holds the current
-sprint's code as later weeks land. See the
-[Build System section](https://ucr-cs-179k-summer-2026.github.io/project1/#build-system)
-of the design page for why we use CMake instead of manual `g++` commands.
-
 ## Using the CLI
 
 Start it with no arguments and you get a menu:
@@ -83,66 +77,20 @@ Thanks for choosing our program!
 `GET` takes field names and array indexes in the order they should be
 followed. Other operations can be joined with `|` to form a query pipeline.
 
-## Version Control
+## Version Control & Benchmarking
 
-The project uses version IDs to keep track of which code was used for each
-performance test. The format is `week<number>-v<number>`.
-
-- `week2-v1` is the Week 2 baseline.
-- `week2-v2` is the first optimized Week 2 version.
-- `week2-v3` is the next optimized Week 2 version.
-- `week3-v1` starts a new baseline for Week 3.
-
-The current version is stored in `week2/version.cpp`. Run this to check the
-version of the program that was built:
+Builds are labeled with a version ID (`week<N>-v<N>`) so performance can be
+compared across optimizations, and a separate benchmark binary measures
+that performance against a large sample dataset.
 
 ```sh
-./build/streamline --version
+./build/streamline --version   # check the current version ID
+./build/benchmark               # run the performance benchmark
 ```
 
-Before measuring an optimization:
-
-1. Update the version ID in `week2/version.cpp` and its expected value in
-   `tests/correctness/tests.cpp`.
-2. Build the program in Release mode.
-3. Run the correctness tests.
-4. Run the performance tests.
-5. Save the version ID with the performance results.
-
-Every code change being measured gets a new version ID. A version ID should
-not be reused after its performance results have been saved. The performance
-log will use these IDs to compare speed changes between versions.
-
-This system labels builds for performance comparisons. Git is still used
-separately for source history, branches, and restoring old code.
-
-## Benchmark
-
-The Week 2 benchmark uses `json/students.json`, which is a 50 MB file with
-85,032 records. It uses `uploadFile()`, `Session`, and the current query
-pipeline to run `AVERAGE(GET("gpa"))`.
-
-Build in Release mode and run the correctness tests first:
-
-```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-./build/tests tests/data
-```
-
-Run the benchmark from the repository root:
-
-```sh
-./build/benchmark
-```
-
-The benchmark has one warm-up run followed by five measured runs. The last
-row contains the median total time. Results are printed as CSV with the
-version, dataset, query, record count, and times in milliseconds.
-
-The benchmark measures the same session and query execution path used by the
-CLI. Compare results from different versions using the same computer, build
-type, and dataset.
+The versioning scheme, the workflow for measuring an optimization, the
+benchmark's methodology, and how to compare results across versions are
+documented on the [design page](https://ucr-cs-179k-summer-2026.github.io/project1/#versioning).
 
 ## Major Features
 
