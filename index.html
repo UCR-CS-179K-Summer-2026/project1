@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>JSON/JSONL Parser — Design</title>
+    <title>Streamline — Design</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -335,8 +335,8 @@
   </head>
   <body>
     <header>
-      <h1>JSON/JSONL Parser</h1>
-      <p>A low-memory command-line tool for parsing and querying JSON &amp; JSONL files — Javier Herrera Jr, Jules, Ryan</p>
+      <h1>Streamline</h1>
+      <p>A low-memory command-line tool for parsing and querying JSON &amp; JSONL files, with a small purpose-built query language — Javier Herrera Jr, Jules, Ryan</p>
       <div class="links">
         <a href="https://github.com/UCR-CS-179K-Summer-2026/project1">Repo</a>
         <a href="https://github.com/UCR-CS-179K-Summer-2026/project1/blob/main/README.md">README</a>
@@ -360,14 +360,18 @@
       <section id="architecture">
         <h2>System Architecture</h2>
         <p>
-          Sprint 1 is a four-stage pipeline: a <strong>Scanner</strong> tokenizes raw text,
-          a <strong>Parser</strong> consumes tokens and builds a tree of <code>JSONValue</code>
-          nodes (each one a tagged <code>std::variant</code>), a <strong>file reader</strong>
-          drives the parser over a <code>.json</code> or <code>.jsonl</code> file and answers
-          path queries against the resulting tree, and a thin <strong>driver</strong>
-          (<code>demo.cpp</code>) wires it together for the CLI.
+          Streamline is built around <strong>two independent parsers</strong>, not one. The
+          first is the JSON parser from Sprint 1 — a <strong>Scanner</strong> tokenizes raw
+          text and a <strong>Parser</strong> builds a tree of <code>JSONValue</code> nodes
+          (each one a tagged <code>std::variant</code>). The second, added this sprint, is a
+          completely separate <strong>query-language parser</strong> — its own
+          <code>QueryScanner</code> and <code>QueryParser</code> — that turns a query string
+          like <code>FILTER(GET("gpa") &gt; 3.5) | LIMIT(5)</code> into an expression tree,
+          which an <strong>execution engine</strong> then walks, one pipeline stage at a
+          time, against the uploaded document.
         </p>
 
+        <h3>Loading a file</h3>
         <div class="pipeline">
           <div class="stage">
             <div class="owner">Jules</div>
@@ -390,68 +394,94 @@
           </div>
           <div class="arrow">&#8594;</div>
           <div class="stage">
-            <div class="owner">Javier</div>
-            <h4>File reader &amp; lookup engine</h4>
+            <div class="owner">Ryan</div>
+            <h4>Session</h4>
             <ul>
-              <li><code>file-reader.h</code> / <code>.cpp</code></li>
-              <li><code>readFile()</code> — dispatches on extension</li>
-              <li><code>lookup()</code>, <code>formatResult()</code></li>
+              <li><code>session.h</code></li>
+              <li><code>uploadFile()</code> parses the whole document once</li>
+              <li>held in memory — no re-read per query</li>
+            </ul>
+          </div>
+        </div>
+        <p class="muted">
+          The whole uploaded document becomes a single <code>JSONValue</code> stored on
+          <code>Session::file</code> — not a list of records the way Sprint 1's
+          <code>readFile()</code> returned one. Every query then runs against that one value.
+        </p>
+
+        <h3>Running a query</h3>
+        <div class="pipeline">
+          <div class="stage">
+            <div class="owner">Jules</div>
+            <h4>QueryScanner / QueryParser</h4>
+            <ul>
+              <li><code>query-parser.h</code> / <code>.cpp</code></li>
+              <li>tokenizes <code>FILTER</code>/<code>SORT</code>/<code>GROUPBY</code>/…</li>
+              <li>recursive-descent — comparisons, <code>AND</code>/<code>OR</code></li>
             </ul>
           </div>
           <div class="arrow">&#8594;</div>
           <div class="stage">
-            <div class="owner">Ryan</div>
-            <h4>CLI, testing &amp; integration</h4>
+            <div class="owner">Jules &amp; Javier</div>
+            <h4>Expression tree</h4>
             <ul>
-              <li><code>demo.cpp</code>, <code>test_lookup.cpp</code></li>
-              <li>build &amp; run instructions</li>
-              <li>CLI/CMake — in progress</li>
+              <li><code>ExpressionNode</code> — a variant, indexed by <code>NodeId</code></li>
+              <li><code>QueryFunction</code> — one per pipeline stage</li>
+              <li>built once per query string</li>
+            </ul>
+          </div>
+          <div class="arrow">&#8594;</div>
+          <div class="stage">
+            <div class="owner">Javier</div>
+            <h4><code>excecuteQuery()</code></h4>
+            <ul>
+              <li><code>file-reader.cpp</code></li>
+              <li>walks each <code>QueryFunction</code> in order</li>
+              <li>evaluates <code>FILTER</code>/<code>SORT</code>/<code>LIMIT</code>/<code>GROUPBY</code>/<code>AVERAGE</code></li>
             </ul>
           </div>
         </div>
-
         <p class="muted">
-          A file flows in on the left: <code>readFile()</code> checks the extension and
-          dispatches to <code>readJsonlFile()</code> (one <code>Parser</code> per line) or
-          <code>readJsonFile()</code> (a single <code>Parser</code> over the whole document,
-          splatting a top-level array into one record per element). Each record is an owned
-          <code>JSONValue</code> tree; <code>lookup()</code> then walks that tree to answer a
-          path query, and <code>formatResult()</code> turns the answer (or an error) into
-          printable text.
+          <code>GROUPBY(GET("city")) | AVERAGE(GET("price"))</code> is one query string but
+          two <code>QueryFunction</code>s. <code>excecuteQuery()</code> starts with
+          <code>current = session.file</code> and, for each stage, replaces <code>current</code>
+          with that stage's result — <code>GROUPBY</code> turns an array into an object keyed
+          by group, and the following <code>AVERAGE</code> sees that object and averages
+          <em>within</em> each group instead of across the whole array. Every stage is checked
+          against the shape it actually got (array vs. object) and fails with a readable error
+          rather than misreading the wrong type.
         </p>
       </section>
 
       <section id="roles">
         <h2>Team &amp; Roles</h2>
-        <p class="muted">Assignments from <a href="https://github.com/UCR-CS-179K-Summer-2026/project1/blob/main/week1/PLAN.md">Sprint 1's PLAN.md</a>, mapped onto the modules above.</p>
+        <p class="muted">Roles shifted between sprints as the project grew from "parse and look up one path" to a real query language — this reflects who owns what now, not the original Sprint 1 split.</p>
         <div class="roles">
           <div class="card">
             <div class="owner">Jules</div>
-            <h4>JSON parser &amp; data model</h4>
+            <h4>JSON parser, escaping &amp; query grammar</h4>
             <ul>
-              <li>Defined the <code>JSONValue</code> type (null, bool, number, string, object, array)</li>
-              <li>Built the <code>Scanner</code> tokenizer and recursive-descent <code>Parser</code></li>
-              <li>Handles whitespace, escapes, nesting, and malformed-input errors</li>
-              <li>Added support for JSON extensions in <code>readJsonFile()</code></li>
+              <li><code>Scanner</code>/<code>Parser</code> for JSON, and the strict escape/control-character validation on top</li>
+              <li>Fixed <code>\uXXXX</code> decoding to correctly combine surrogate pairs and UTF-8-encode the result — emoji now decode and compare correctly</li>
+              <li>Designed and built <code>QueryScanner</code>/<code>QueryParser</code> — the tokenizer and recursive-descent grammar for the query language itself, including <code>AND</code>/<code>OR</code></li>
             </ul>
           </div>
           <div class="card">
             <div class="owner">Javier</div>
-            <h4>File reader &amp; lookup engine</h4>
+            <h4>Query execution engine</h4>
             <ul>
-              <li>Reads a <code>.json</code> or <code>.jsonl</code> file and drives Jules's parser</li>
-              <li>Implements dotted/bracketed path lookup (<code>.student.name</code>, <code>.scores[0]</code>)</li>
-              <li>Decides behavior for blank lines, malformed lines, missing fields, bad indices</li>
-              <li>Formats results (and errors) for terminal output</li>
+              <li>Implemented <code>FILTER</code>, <code>SORT</code>, <code>LIMIT</code>, <code>GROUPBY</code>, and <code>AVERAGE</code> against Jules's expression tree in <code>excecuteQuery()</code></li>
+              <li>Sort-key precomputation and hash-map grouping (see <a href="#algorithms">Algorithms</a>) instead of the naive O(n log n) / O(n·groups) approach</li>
+              <li>Found and fixed several crash bugs (type-mismatch comparisons, non-numeric <code>AVERAGE</code>, invalid <code>GROUPBY</code> keys) so bad input fails cleanly instead of taking the program down</li>
             </ul>
           </div>
           <div class="card">
             <div class="owner">Ryan</div>
-            <h4>CLI, testing &amp; integration</h4>
+            <h4>CLI, integration, testing &amp; benchmarking</h4>
             <ul>
-              <li>Command-line entry point accepting a filename and a query</li>
-              <li>Unit/integration tests across primitives, nesting, arrays, invalid input</li>
-              <li>Build setup (CMake) and integrating both branches</li>
+              <li><code>Session</code>-based CLI (<code>main.cpp</code>) — menu-driven upload-once, query-many-times flow</li>
+              <li><code>integration.cpp</code> — the legacy <code>readFile()</code>/string-path <code>get()</code> surface the test suite runs against</li>
+              <li>Version tracking (<code>--version</code>), the regression test suite, and the performance benchmark harness</li>
             </ul>
           </div>
         </div>
@@ -552,6 +582,41 @@
           wash on a small tree, and a clear win once the allocation count and pointer-chasing
           start to dominate on a large one.
         </p>
+
+        <h3>A second, parallel data model: the query's expression tree</h3>
+        <p class="muted">
+          <code>JSONValue</code> represents <em>data</em>. Queries need their own tree to
+          represent a <em>program</em> — <code>FILTER(GET("gpa") &gt; 3.5)</code> is a small
+          expression, and <code>QueryParser</code> builds it the same variant-based way
+          Sprint 1's data model works: an <code>ExpressionNode</code> is a tagged
+          <code>std::variant</code>, and every node lives in one flat <code>vector</code>,
+          referenced by a <code>NodeId</code> (an index into that vector) rather than by
+          pointer.
+        </p>
+
+        <div class="hierarchy">
+          <div class="base">ExpressionNode<br><span class="muted" style="font-size:0.75rem">variant&lt;BooleanOperand, StringOperand, NumberOperand, GetOperand, BinaryOperand&gt;</span></div>
+          <div class="connector">&#9660;</div>
+          <div class="leaves">
+            <div class="leaf">BooleanOperand<small>true / false literal</small></div>
+            <div class="leaf">StringOperand<small>"literal" text</small></div>
+            <div class="leaf">NumberOperand<small>numeric literal</small></div>
+            <div class="leaf">GetOperand<small>vector&lt;string_view&gt; path</small></div>
+            <div class="leaf">BinaryOperand<small>op, NodeId left, NodeId right</small></div>
+          </div>
+        </div>
+
+        <p class="muted">
+          <code>BinaryOperand</code> is what makes <code>FILTER(GET("a") &gt; 0 AND GET("b") == 2)</code>
+          possible: it doesn't hold its operands directly, it holds two more <code>NodeId</code>s
+          — so a comparison, an <code>AND</code>, and an <code>OR</code> are all the same struct,
+          and evaluating one just means recursively evaluating whatever nodes its <code>left</code>
+          and <code>right</code> point at. A separate <code>QueryFunction</code> variant
+          (<code>Get</code>/<code>Filter</code>/<code>Sort</code>/<code>Limit</code>/<code>GroupBy</code>/<code>Average</code>)
+          represents the pipeline stages themselves, each one pointing into this same node
+          vector for whatever expression it needs (a <code>FILTER</code>'s condition, a
+          <code>SORT</code>'s target field, and so on).
+        </p>
       </section>
 
       <section id="interfaces">
@@ -604,11 +669,27 @@ public:
     JSONValue parse();
 };</code></pre>
 
-        <h3>File reader &amp; lookup engine (Javier)</h3>
-        <p class="muted"><code>readFile()</code> reads the whole file into memory, checks the extension, and dispatches to the right sub-reader.</p>
-        <pre><code>vector&lt;JSONValue&gt; readFile(const string&amp; path);          // dispatches on extension
-vector&lt;JSONValue&gt; readJsonlFile(const string&amp; contents);  // one Parser per line
-vector&lt;JSONValue&gt; readJsonFile(const string&amp; contents);   // one Parser for the whole doc
+        <h3>Query parser (Jules)</h3>
+        <p class="muted">Its own recursive-descent grammar, entirely separate from the JSON parser above. <code>parsePipeline()</code> splits on <code>|</code>; each stage's <code>parseFilter()</code>/<code>parseSort()</code>/etc. builds <code>ExpressionNode</code>s as needed and pushes one <code>QueryFunction</code>.</p>
+        <pre><code>class QueryParser {
+public:
+    explicit QueryParser(string_view query);
+    void parse();
+
+    const vector&lt;ExpressionNode&gt;&amp; getExpressionNodes() const;
+    const vector&lt;QueryFunction&gt;&amp; getFunctions() const;
+};</code></pre>
+
+        <h3>Session &amp; execution engine (Ryan &amp; Javier)</h3>
+        <p class="muted"><code>Session</code> holds the uploaded document; <code>excecuteQuery()</code> runs a query string against it and returns the formatted result (or a formatted error) as one <code>string</code> — no exceptions escape past it for a malformed query, they're caught by the caller in <code>main.cpp</code>.</p>
+        <pre><code>struct Session {
+    JSONValue file = JSONValue(nullptr);
+    bool isInitialized = false;
+    void initialize(JSONValue v);
+};
+
+void uploadFile(const string&amp; path, Session&amp; session);
+string excecuteQuery(Session&amp; session, string query);
 
 struct LookupResult {
     bool ok;
@@ -616,17 +697,26 @@ struct LookupResult {
     string error;            // valid when ok == false
 };
 
-LookupResult lookup(const JSONValue&amp; value, const string&amp; path);
+LookupResult get(const JSONValue&amp; value, const vector&lt;string_view&gt;&amp; path);
 string formatResult(const LookupResult&amp; result);</code></pre>
 
-        <h3>CLI / driver (Ryan)</h3>
-        <p class="muted">Sprint 1's driver is <code>demo.cpp</code>: reads a fixed file and query, prints one result per record. A general-purpose <code>./sluice students.json ".student.name"</code> CLI (argv-driven filename + query) is the target for the CLI stage.</p>
-        <pre><code>./demo
-// Reading students.json, query: .student[4].scores</code></pre>
+        <h3>CLI (Ryan)</h3>
+        <p class="muted">Menu-driven: upload a file once, then run as many queries against it as you want without re-reading the file. The direct <code>argv</code> form still works too for scripting.</p>
+        <pre><code>$ ./streamline
+[MENU]  u upload   s search   m menu   q quit
+&gt; u
+Enter path to your file: json/students.json
+File students.json uploaded successfully. (85032 records)
+[students.json] &gt; s
+Enter your search query: GROUPBY(GET("major")) | AVERAGE(GET("gpa"))
+{ "Computer Science": 2.998, "Statistics": 3.003, ... }
+
+$ ./streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'</code></pre>
       </section>
 
       <section id="edge-cases">
         <h2>Edge Case Handling</h2>
+        <p class="muted">The JSON-parsing edge cases from Sprint 1 (below) still apply unchanged. The query engine added a second layer of edge cases on top — several of them found by actually trying to break the five operations, not anticipated up front.</p>
         <table>
           <thead>
             <tr><th>Case</th><th>Behavior</th></tr>
@@ -637,98 +727,127 @@ string formatResult(const LookupResult&amp; result);</code></pre>
               <td>Throws <code>std::runtime_error</code> with a suggestion (check path, permissions, working directory).</td>
             </tr>
             <tr>
-              <td>Blank line in <code>.jsonl</code></td>
-              <td>Skipped outright (no record pushed). <code>records[i]</code> no longer corresponds to line <code>i</code> — <code>lineNumber</code> is tracked solely for error messages.</td>
-            </tr>
-            <tr>
-              <td>Malformed line in <code>.jsonl</code></td>
-              <td>A single <code>try</code>/<code>catch</code> now wraps the whole read loop: on the first parse failure, a warning (with line number) is printed to <code>stderr</code> and <code>readJsonlFile()</code> returns an <strong>empty</strong> vector — the rest of the file is not parsed.</td>
-            </tr>
-            <tr>
-              <td>Malformed <code>.json</code> file</td>
-              <td><code>readJsonFile()</code> catches the parse exception, prints a warning to <code>stderr</code>, and returns an empty vector.</td>
-            </tr>
-            <tr>
               <td>Unterminated string / bad token in scanner</td>
-              <td><code>Scanner::scan()</code> throws <code>runtime_error</code> — "Unterminated string" regardless of file type; otherwise "Invalid JSON input at line N" for <code>.json</code> or "Invalid JSONL input" for <code>.jsonl</code>, based on the <code>ParserType</code> it was constructed with.</td>
+              <td><code>Scanner::scan()</code> throws <code>runtime_error</code> — "Unterminated string" regardless of file type; otherwise "Invalid JSON input at line N" for <code>.json</code> or "Invalid JSONL input" for <code>.jsonl</code>.</td>
             </tr>
             <tr>
-              <td>Wrong token where a key/colon/comma/brace was expected</td>
-              <td><code>Parser::parse()</code> throws a specific <code>runtime_error</code> ("Expected string key in object", etc.) for <code>.jsonl</code>, or a generic "Warning: line N failed to parse" for <code>.json</code>.</td>
+              <td>Illegal escape sequence / raw control character in a string</td>
+              <td>Scanner rejects both explicitly rather than passing them through — <code>\uXXXX</code> is validated for length, and bytes below <code>0x20</code> require an escape.</td>
             </tr>
             <tr>
-              <td>Missing field / bad index in <code>lookup()</code></td>
-              <td>Returns <code>LookupResult{ok: false, error: "..."}</code> instead of crashing (e.g. "field 'x' not found", "index 9 out of range").</td>
+              <td><code>\uXXXX</code> above the Basic Multilingual Plane (emoji)</td>
+              <td>A high/low surrogate pair is combined into the real code point and UTF-8-encoded correctly. Comparing an emoji field with <code>FILTER(... == "&#x1F349;")</code> works; a bare <code>GET</code> on that field still prints the escaped form rather than the rendered character.</td>
             </tr>
             <tr>
-              <td>Indexing into a non-array, or field lookup on a non-object</td>
-              <td><code>lookup()</code> checks <code>getType() != ValueType::Array</code>/<code>Object</code> first and returns a typed error instead of a bad <code>std::get</code>.</td>
+              <td><code>FILTER</code> where some records are missing the field</td>
+              <td>Those records just don't match — the query still returns a result instead of erroring on the first gap.</td>
+            </tr>
+            <tr>
+              <td><code>SORT</code> where a record is missing the sort field</td>
+              <td>Deliberately stricter than <code>FILTER</code>: there's no sane position for a record with no value, so this is a clean error instead of a silent skip.</td>
+            </tr>
+            <tr>
+              <td><code>SORT</code> comparing incompatible types (string vs. number)</td>
+              <td>Clean <code>Error: cannot compare...</code> — this used to be an uncaught exception that crashed the whole program; found and fixed this sprint.</td>
+            </tr>
+            <tr>
+              <td><code>AVERAGE</code> on a non-numeric field, or on zero usable values</td>
+              <td>Both are clean errors now ("field is not a number", "no numeric values found") — also previously an uncaught crash.</td>
+            </tr>
+            <tr>
+              <td><code>GROUPBY</code> where the key field is itself an array/object</td>
+              <td>That one record is excluded from every group instead of crashing the whole query.</td>
+            </tr>
+            <tr>
+              <td>Malformed query syntax</td>
+              <td><code>QueryParser::parse()</code>'s exception is now caught by the CLI, printing a readable error and returning to the menu instead of exiting the program.</td>
             </tr>
           </tbody>
         </table>
+
+        <div class="callout">
+          <strong>Known gaps, not yet fixed:</strong> a multi-record <code>.jsonl</code> upload
+          only captures its first record right now (<code>Session</code> holds one
+          <code>JSONValue</code>, and the file is parsed as a single document rather than
+          line-by-line the way Sprint 1's <code>readJsonlFile()</code> did). A bare scalar
+          value followed by trailing content (e.g. <code>"a": 1</code> with no wrapping
+          braces) can also slip through unrejected. Neither crashes anything — both are
+          correctness gaps we know about and are choosing to leave for a follow-up rather
+          than rush before the demo.
+        </div>
       </section>
 
       <section id="query-language">
         <h2>Query Language</h2>
-        <p class="muted">Path lookup is implemented and demoed in Sprint 1. The rest is the planned query language for later sprints.</p>
+        <p class="muted">All six operations below are implemented and pass a live regression suite (see <a href="#build-system">Build System</a>). Every result on this page was run against the actual binary — not hand-written.</p>
 
         <div class="feature">
-          <h3>Get <span class="status done">implemented</span></h3>
-          <p>Retrieve the value at a given path in a JSON object — this is <code>lookup()</code> today.</p>
+          <h3>Get <span class="status done">done</span></h3>
+          <p>Retrieve the value at a given path. Multiple arguments walk into nested objects/arrays.</p>
           <dl>
-            <dt>Query</dt><dd><code>.student.name</code></dd>
+            <dt>Query</dt><dd><code>GET("student","name")</code></dd>
             <dt>JSON</dt><dd><code>{"student":{"name":"Ryan","scores":[90,85]}}</code></dd>
             <dt>Result</dt><dd><code>"Ryan"</code></dd>
           </dl>
         </div>
 
         <div class="feature">
-          <h3>Filter &amp; Comparison <span class="status planned">planned</span></h3>
-          <p>Keep only the records matching a comparison.</p>
+          <h3>Filter &amp; Comparison <span class="status done">done</span></h3>
+          <p>Keep only the records matching a boolean expression — comparisons combine with <code>AND</code>/<code>OR</code>, not just one condition.</p>
           <dl>
-            <dt>Query</dt><dd><code>FILTER(.a &gt; 1)</code></dd>
+            <dt>Query</dt><dd><code>FILTER(GET("a") &gt; 1)</code></dd>
             <dt>JSON</dt><dd><code>[{"a": 1, "b": 2}, {"a": 2, "b": 2}]</code></dd>
             <dt>Result</dt><dd><code>[{"a": 2, "b": 2}]</code></dd>
+            <dt>Also works</dt><dd><code>FILTER(GET("major") == "CS" AND GET("gpa") &gt; 3.5)</code></dd>
           </dl>
         </div>
 
         <div class="feature">
-          <h3>Sort <span class="status planned">planned</span></h3>
+          <h3>Sort <span class="status done">done</span></h3>
           <p>Order an array of records by a field, ascending or descending.</p>
           <dl>
-            <dt>Query</dt><dd><code>SORT(a, "asc")</code></dd>
+            <dt>Query</dt><dd><code>SORT(GET("a"), ASC)</code></dd>
             <dt>JSON</dt><dd><code>[{"a": 1, "b": 2}, {"a": 0, "b": 3}]</code></dd>
             <dt>Result</dt><dd><code>[{"a": 0, "b": 3}, {"a": 1, "b": 2}]</code></dd>
           </dl>
         </div>
 
         <div class="feature">
-          <h3>Limit <span class="status planned">planned</span></h3>
+          <h3>Limit <span class="status done">done</span></h3>
           <p>Return only the first N records.</p>
           <dl>
             <dt>Query</dt><dd><code>LIMIT(1)</code></dd>
             <dt>JSON</dt><dd><code>[{"a": 1, "b": 2}, {"a": 0, "b": 3}]</code></dd>
-            <dt>Result</dt><dd><code>{"a": 1, "b": 2}</code></dd>
+            <dt>Result</dt><dd><code>[{"a": 1, "b": 2}]</code></dd>
           </dl>
         </div>
 
         <div class="feature">
-          <h3>GroupBy <span class="status planned">planned</span></h3>
+          <h3>GroupBy <span class="status done">done</span></h3>
           <p>Bucket records by the value of a field.</p>
           <dl>
-            <dt>Query</dt><dd><code>GROUPBY(.a)</code></dd>
+            <dt>Query</dt><dd><code>GROUPBY(GET("a"))</code></dd>
             <dt>JSON</dt><dd><code>[{"a": 1, "b": 2}, {"a": 0, "b": 3}, {"a": 1, "b": 5}]</code></dd>
-            <dt>Result</dt><dd><code>{"0": [{"a": 0, "b": 3}], "1": [{"a": 1, "b": 2}, {"a": 1, "b": 5}]}</code></dd>
+            <dt>Result</dt><dd><code>{"1": [{"a": 1, "b": 2}, {"a": 1, "b": 5}], "0": [{"a": 0, "b": 3}]}</code></dd>
           </dl>
         </div>
 
         <div class="feature">
-          <h3>Average <span class="status planned">planned</span></h3>
-          <p>Compute the mean of a field, optionally after grouping.</p>
+          <h3>Average <span class="status done">done</span></h3>
+          <p>Compute the mean of a field. Works standalone (one number) or right after <code>GROUPBY</code> (one number per group, same code path).</p>
           <dl>
-            <dt>Query</dt><dd><code>GROUPBY(.city) | AVERAGE(.price)</code></dd>
+            <dt>Query</dt><dd><code>GROUPBY(GET("city")) | AVERAGE(GET("price"))</code></dd>
             <dt>JSON</dt><dd><code>[{"id":1,"city":"Riverside","price":450000}, {"id":2,"city":"Riverside","price":480000}, {"id":3,"city":"Los Angeles","price":800000}, {"id":4,"city":"Riverside","price":460000}]</code></dd>
             <dt>Result</dt><dd><code>{"Riverside": 463333.33, "Los Angeles": 800000}</code></dd>
+          </dl>
+        </div>
+
+        <div class="feature">
+          <h3>Piping, chained without limit <span class="status done">done</span></h3>
+          <p><code>|</code> threads one stage's output into the next. There's no fixed cap on how many stages can chain — tested up to 50 in a row with no issue.</p>
+          <dl>
+            <dt>Query</dt><dd><code>FILTER(GET("gpa") &gt; 3.9) | SORT(GET("gpa"), DESC) | LIMIT(3)</code></dd>
+            <dt>Behavior</dt><dd>Each stage sees the <em>previous</em> stage's result, not the original document — a stage checks whether it got the shape it needs (array vs. object) and errors cleanly if not.</dd>
           </dl>
         </div>
       </section>
@@ -781,18 +900,43 @@ string formatResult(const LookupResult&amp; result);</code></pre>
           handle.
         </p>
 
+        <h3>Sort-key precomputation (Schwartzian transform)</h3>
+        <p class="muted">
+          A naive <code>SORT</code> comparator calls <code>GET</code> on both sides of every
+          comparison — for <code>n</code> records that's <code>O(n log n)</code> field
+          lookups. <code>SORT</code> instead looks up each record's key exactly once before
+          sorting, into a <code>vector&lt;pair&lt;const JSONValue*, size_t&gt;&gt;</code>,
+          and sorts that — <code>O(n)</code> lookups, with the comparator itself doing nothing
+          but comparing two already-known values.
+        </p>
+
+        <h3>Hash-map grouping</h3>
+        <p class="muted">
+          A naive <code>GROUPBY</code> finds-or-creates a record's bucket by scanning every
+          group seen so far — <code>O(records &times; groups)</code> in the worst case.
+          <code>GROUPBY</code> instead keeps an <code>unordered_map&lt;string, size_t&gt;</code>
+          from group key to bucket index, so placing each record is <code>O(1)</code> average
+          regardless of how many distinct groups exist.
+        </p>
+
         <div class="callout">
-          <strong>Not yet optimized:</strong> passing the buffer of the whole file to <code>readJsonlFile()</code> is 
-          inefficient for large files, but it was the simplest way to get a working prototype 
-          for Sprint 1.
+          <strong>Measured, not assumed:</strong> parsing <code>json/students.json</code>
+          (85,032 records) takes ~550&ndash;580&nbsp;ms either way — the JSON parser itself
+          didn't get faster this sprint, and there wasn't a real lever to pull there (it's
+          already a single-pass <code>O(n)</code> recursive-descent parse). Where the
+          optimizations above actually matter: a <code>FILTER</code> that matches nearly every
+          record and prints the full result added ~520&nbsp;ms on top of parsing — almost
+          entirely copying and formatting the result set — versus ~40&nbsp;ms for a
+          <code>FILTER</code> that matches nothing at all. The per-record evaluation logic is
+          already cheap; large result sets are where the cost actually lives.
         </div>
 
         <div class="callout">
-          <strong>Not yet optimized:</strong> <code>lookup()</code> does a linear scan over
-          an object's entries for every field access, and each line still gets its own
-          <code>Parser</code>/<code>Scanner</code> instance. Both are fine at Sprint 1
-          scale and are candidates to revisit once there's a real large-file benchmark to
-          measure against.
+          <strong>Not yet optimized:</strong> <code>FILTER</code>/<code>GROUPBY</code> still
+          deep-copy every matching <code>JSONValue</code> into the result set, rather than
+          carrying indices/pointers until the very end. <code>lookup()</code>/<code>get()</code>
+          still does a linear scan over an object's entries for every field access — fine at
+          typical object sizes, a candidate to revisit if that stops being true.
         </div>
       </section>
 
@@ -846,31 +990,35 @@ string formatResult(const LookupResult&amp; result);</code></pre>
 
         <h3>Layout &amp; usage</h3>
         <p class="muted">
-          <code>CMakeLists.txt</code> lives at the repo root and currently points at
-          <code>week1/</code> as the active source for the <code>demo</code> and
-          <code>test_lookup</code> targets. The <code>week1</code>/<code>week2</code>/…
-          folders are a weekly progress log, not each an independently runnable target —
-          we don't build all of them at once. As the "final" version settles into a
-          specific folder, <code>CMakeLists.txt</code> gets repointed at that folder rather
-          than the project growing a build target per week.
+          <code>CMakeLists.txt</code> lives at the repo root and now builds four targets from
+          <code>week2/</code> — <code>streamline</code> is the CLI, <code>tests</code> is the
+          regression suite, <code>benchmark</code> is the performance harness referenced in
+          <a href="#algorithms">Algorithms &amp; Optimizations</a>, and <code>w1tests</code>
+          keeps Sprint 1's original code building on its own, untouched, from
+          <code>week1/</code> — kept around deliberately as a record of where the project
+          started, not folded into the current codebase.
         </p>
-        <pre><code>cmake -B build          # configure once
-cmake --build build      # (re)build — only recompiles what changed
-./build/demo
-./build/test_lookup</code></pre>
+        <pre><code>cmake -B build           # configure once
+cmake --build build       # (re)build — only recompiles what changed
+./build/streamline        # opens the menu
+./build/tests              # regression suite
+./build/benchmark           # performance harness</code></pre>
         <p class="muted">
-          <code>demo.cpp</code> opens <code>students.json</code> via a relative path, so a
-          post-build step copies the sample data next to the built binary — <code>./build/demo</code>
-          works regardless of which directory you run it from, instead of only working when
-          launched from inside <code>week1/</code>.
+          Both <code>streamline</code> and <code>tests</code> compile the same
+          <code>CORE_SOURCES</code> — <code>scanner.cpp</code>, <code>parser.cpp</code>,
+          <code>file-reader.cpp</code>, <code>integration.cpp</code>, <code>version.cpp</code>,
+          <code>query-parser.cpp</code> — so the test suite is exercising the exact same
+          engine the CLI runs, not a separate copy.
         </p>
 
         <div class="callout">
-          <strong>Repo hygiene that came with this:</strong> <code>build/</code> and other
-          CMake-generated files are gitignored, and the compiled <code>week1/demo</code>
-          binary that had been committed to the repo (a stale artifact from the old manual
-          workflow) was untracked — the build output belongs in the ignored
-          <code>build/</code> directory now, not in source control.
+          <strong>A build that silently didn't build:</strong> for a stretch this sprint,
+          <code>query-parser.cpp</code> was missing from <code>CORE_SOURCES</code> — every
+          other file compiled fine, and the failure only showed up at the final link step
+          (<code>undefined symbols: QueryParser::parse()</code>), which is easy to miss if
+          you only skim compiler output for the word "error" on the wrong line. It recurred
+          more than once after a fresh pull before it stuck — worth checking
+          <code>CORE_SOURCES</code> first if a fresh clone ever fails to link.
         </div>
       </section>
 
@@ -915,29 +1063,39 @@ cmake --build build      # (re)build — only recompiles what changed
             <p>Fixed a crash on malformed top-level JSON, an uncaught-exception crash in <code>demo.cpp</code> on file-not-found, and a scanner bug that rejected valid numbers followed by whitespace. Replaced the per-person <code>g++</code> commands with a root <a href="#build-system">CMake build</a> — see that section for why.</p>
           </div>
 
-          <div class="sprint-label">Sprints 2&ndash;5 (Weeks 2&ndash;5) — planned</div>
+          <div class="sprint-label">Sprint 2 (Week 2) — Aug 3&ndash;10</div>
 
-          <div class="entry planned">
-            <div class="date">Not yet scheduled</div>
-            <h4>Query language <span class="status planned">planned</span></h4>
-            <p>The remaining backlog from <a href="#query-language">Query Language</a>: <code>FILTER</code>, <code>SORT</code>, <code>LIMIT</code>, <code>GROUPBY</code>, <code>AVERAGE</code>, and chaining them (e.g. <code>GROUPBY | AVERAGE</code>). Not yet split across specific weeks.</p>
+          <div class="entry">
+            <div class="date">Aug 3&ndash;4</div>
+            <h4>Escaping &amp; stricter scanning</h4>
+            <p>Decoded escape sequences on read and re-escaped them correctly on the way back out; the scanner started rejecting illegal escapes and raw control characters instead of passing them through.</p>
           </div>
-          <div class="entry planned">
-            <div class="date">Not yet scheduled</div>
-            <h4>CLI &amp; build <span class="status planned">planned</span></h4>
-            <p>An argv-driven <code>./sluice &lt;file&gt; "&lt;query&gt;"</code> entry point and a CMake build, replacing the fixed-query <code>demo.cpp</code> driver.</p>
+          <div class="entry">
+            <div class="date">Aug 5&ndash;7</div>
+            <h4>Two competing query engines, in parallel</h4>
+            <p>A regex-based query engine and Jules's tokenizer/AST-based <code>QueryParser</code> were built independently on separate branches at the same time. When they merged, the AST-based design — with real <code>AND</code>/<code>OR</code> support — is what moved forward.</p>
           </div>
-          <div class="entry planned">
-            <div class="date">Not yet scheduled</div>
-            <h4>Performance pass <span class="status planned">planned</span></h4>
-            <p>Revisit the two spots already flagged in <a href="#algorithms">Algorithms &amp; Optimizations</a> — whole-file buffering before <code>.jsonl</code> parsing, and linear-scan field lookup — once there's a real large-file benchmark to measure against.</p>
+          <div class="entry">
+            <div class="date">Aug 8&ndash;9</div>
+            <h4>Session refactor &amp; CLI integration</h4>
+            <p>Moved from a list-of-records model to <code>Session</code> holding one document; wired the CLI's menu through <code>excecuteQuery()</code>; added <code>--version</code> and the regression/benchmark harnesses.</p>
+          </div>
+          <div class="entry">
+            <div class="date">Aug 9</div>
+            <h4><code>FILTER</code>/<code>SORT</code>/<code>LIMIT</code>/<code>GROUPBY</code>/<code>AVERAGE</code> implemented <span class="status done">done</span></h4>
+            <p>All five were parsing correctly but executing as no-op stubs. Implemented against the expression tree, with sort-key precomputation and hash-map grouping — see <a href="#algorithms">Algorithms &amp; Optimizations</a> — plus fixes for three crash bugs found while testing them against real data.</p>
+          </div>
+          <div class="entry">
+            <div class="date">Aug 10</div>
+            <h4>Emoji/unicode fix, malformed-query safety <span class="status done">done</span></h4>
+            <p><code>\uXXXX</code> decoding now correctly combines surrogate pairs and UTF-8-encodes the result. A malformed query string no longer crashes the program — the parse exception is caught and reported instead.</p>
           </div>
         </div>
       </section>
     </main>
 
     <footer>
-      Sprint 1 complete &middot; <a href="#timeline">Timeline</a> &middot; <a href="https://github.com/UCR-CS-179K-Summer-2026/project1">UCR-CS-179K-Summer-2026/project1</a>
+      Sprint 2 in progress &middot; <a href="#timeline">Timeline</a> &middot; <a href="https://github.com/UCR-CS-179K-Summer-2026/project1">UCR-CS-179K-Summer-2026/project1</a>
     </footer>
   </body>
 </html>
