@@ -353,6 +353,7 @@
       <a href="#query-language">Query Language</a>
       <a href="#algorithms">Algorithms &amp; Optimizations</a>
       <a href="#build-system">Build System</a>
+      <a href="#versioning">Versioning &amp; Benchmarking</a>
       <a href="#timeline">Timeline</a>
     </nav>
 
@@ -1019,6 +1020,72 @@ cmake --build build       # (re)build — only recompiles what changed
           you only skim compiler output for the word "error" on the wrong line. It recurred
           more than once after a fresh pull before it stuck — worth checking
           <code>CORE_SOURCES</code> first if a fresh clone ever fails to link.
+        </div>
+      </section>
+
+      <section id="versioning">
+        <h2>Versioning &amp; Benchmarking</h2>
+        <p>
+          Every performance-relevant build gets a version ID —
+          <code>week&lt;N&gt;-v&lt;N&gt;</code> — so a measured optimization can be tied to the
+          exact code that produced it. This is separate from git: git tracks source history,
+          branches, and lets you restore old code; the version ID exists specifically so a
+          benchmark result can be labeled and compared later without having to check out an
+          old commit and rebuild it. <code>./build/streamline --version</code> prints the
+          version baked into the binary you're currently running.
+        </p>
+
+        <h3>Version ID scheme</h3>
+        <ul>
+          <li><code>week2-v1</code> — the Week 2 baseline.</li>
+          <li><code>week2-v2</code>, <code>week2-v3</code>, … — each optimization measured
+            against that baseline gets its own ID.</li>
+          <li><code>week3-v1</code> — a new baseline starts each week.</li>
+        </ul>
+
+        <h3>Workflow before measuring an optimization</h3>
+        <ol>
+          <li>Update the version ID in <code>version.cpp</code> and its expected value in
+            <code>tests/correctness/tests.cpp</code>.</li>
+          <li>Build the program in Release mode.</li>
+          <li>Run the correctness tests — a faster wrong answer isn't a win.</li>
+          <li>Run the performance tests.</li>
+          <li>Save the version ID alongside the performance results.</li>
+        </ol>
+        <p class="muted">
+          A version ID is never reused once its results are saved — every code change being
+          measured gets a fresh one, so the performance log can always point at exactly which
+          version a number came from.
+        </p>
+
+        <h3>The benchmark itself</h3>
+        <p class="muted">
+          <code>tests/performance/benchmark.cpp</code> runs against
+          <code>json/students.json</code> — 85,032 records, ~50&nbsp;MB — through
+          <code>uploadFile()</code>, <code>Session</code>, and the real query pipeline
+          (<code>AVERAGE(GET("gpa"))</code>), so it measures the same code path the CLI
+          actually uses, not a synthetic stand-in.
+        </p>
+        <pre><code>cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+./build/tests tests/data     # correctness first
+./build/benchmark             # then performance</code></pre>
+        <p class="muted">
+          One warm-up run followed by five measured runs; the last row is the median total
+          time. Output is CSV — version, dataset, query, record count, and timings in
+          milliseconds — so results across versions can be diffed or charted directly. Only
+          compare runs made on the same machine, build type, and dataset.
+        </p>
+
+        <div class="callout">
+          <strong>What we actually found using this:</strong> parsing
+          <code>students.json</code> takes ~550&ndash;580&nbsp;ms regardless of which query
+          engine optimizations are in place — the JSON parser itself wasn't the bottleneck.
+          The real gap showed up in query execution: a <code>FILTER</code> matching nearly
+          every record and printing the full result added ~520&nbsp;ms on top of parsing,
+          versus ~40&nbsp;ms for one matching nothing — see
+          <a href="#algorithms">Algorithms &amp; Optimizations</a> for what that pointed us
+          at fixing.
         </div>
       </section>
 
