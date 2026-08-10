@@ -8,7 +8,9 @@
 #include <iostream>
 
 #include "file-reader.h"
+#include "integration.h"
 #include "scanner.h"
+#include "session.h"
 #include "version.h"
 
 int passed = 0;
@@ -79,9 +81,20 @@ string parseAndFormat(const string& text) {
     return formatResult(whole);
 }
 
+bool sameOutput(const string& got, const string& want) {
+    if (got.rfind("Error:", 0) == 0 || want.rfind("Error:", 0) == 0) {
+        return got == want;
+    }
+    try {
+        return parseAndFormat(got) == parseAndFormat(want);
+    } catch (const exception&) {
+        return got == want;
+    }
+}
+
 void checkParse(const string& text, const string& want) {
     string got = parseAndFormat(text);
-    if (got == want) {
+    if (sameOutput(got, want)) {
         passed++;
     } else {
         failed++;
@@ -111,12 +124,31 @@ void checkLookup(const string& text, const string& path, const string& want) {
     Parser parser(text, ParserType::JSON);
     JSONValue value = parser.parse();
     string got = formatResult(get(value, path));
-    if (got == want) {
+    if (sameOutput(got, want)) {
         passed++;
     } else {
         failed++;
         cout << "  FAIL " << path << " on " << text << "\n         got  " << got
              << "\n         want " << want << "\n";
+    }
+}
+
+void checkQuery(const string& text, const string& query, const string& want) {
+    try {
+        Parser parser(text, ParserType::JSON);
+        Session session;
+        session.initialize(parser.parse());
+        string got = excecuteQuery(session, query);
+        if (sameOutput(got, want)) {
+            passed++;
+        } else {
+            failed++;
+            cout << "  FAIL " << query << "\n         got  " << got
+                 << "\n         want " << want << "\n";
+        }
+    } catch (const exception& e) {
+        failed++;
+        cout << "  FAIL " << query << "\n         " << e.what() << "\n";
     }
 }
 
@@ -153,7 +185,7 @@ void checkField(const string& file, size_t index, const string& path, const stri
 
 void testVersion() {
     section("version");
-    check(getVersionId() == "week2-v1", "version ID");
+    check(getVersionId() == "week2-v2", "version ID");
 }
 
 void testPrimitives() {
@@ -349,6 +381,27 @@ void testFiles() {
 
 }
 
+void testQueries() {
+    const string records =
+        R"([{"id":1,"city":"Riverside","price":4,"active":true,"profile":{"name":"A"}},{"id":2,"city":"Riverside","price":2,"active":false,"profile":{"name":"B"}},{"id":3,"city":"Los Angeles","price":9,"active":true,"profile":{"name":"C"}}])";
+
+    section("query execution");
+    checkQuery(records, R"(GET(0,"profile","name"))", R"("A")");
+    checkQuery(records, R"(FILTER(GET("price") > 3))",
+               R"([{"id":1,"city":"Riverside","price":4,"active":true,"profile":{"name":"A"}},{"id":3,"city":"Los Angeles","price":9,"active":true,"profile":{"name":"C"}}])");
+    checkQuery(records, R"(SORT(GET("price"), ASC))",
+               R"([{"id":2,"city":"Riverside","price":2,"active":false,"profile":{"name":"B"}},{"id":1,"city":"Riverside","price":4,"active":true,"profile":{"name":"A"}},{"id":3,"city":"Los Angeles","price":9,"active":true,"profile":{"name":"C"}}])");
+    checkQuery(records, "LIMIT(2)",
+               R"([{"id":1,"city":"Riverside","price":4,"active":true,"profile":{"name":"A"}},{"id":2,"city":"Riverside","price":2,"active":false,"profile":{"name":"B"}}])");
+    checkQuery(records, R"(FILTER(GET("active") == true) | SORT(GET("price"), DESC) | LIMIT(1))",
+               R"([{"id":3,"city":"Los Angeles","price":9,"active":true,"profile":{"name":"C"}}])");
+    checkQuery(records, R"(GROUPBY(GET("city")))",
+               R"({"Riverside":[{"id":1,"city":"Riverside","price":4,"active":true,"profile":{"name":"A"}},{"id":2,"city":"Riverside","price":2,"active":false,"profile":{"name":"B"}}],"Los Angeles":[{"id":3,"city":"Los Angeles","price":9,"active":true,"profile":{"name":"C"}}]})");
+    checkQuery(records, R"(AVERAGE(GET("price")))", "5");
+    checkQuery(records, R"(GROUPBY(GET("city")) | AVERAGE(GET("price")))",
+               R"({"Riverside":3,"Los Angeles":9})");
+}
+
 int main(int argc, char** argv) {
     if (argc > 1) dataDir = argv[1];
 
@@ -360,6 +413,7 @@ int main(int argc, char** argv) {
     testStrings();
     testLookup();
     testFiles();
+    testQueries();
     testVersion();
 
     cout << "\n--------------------\n";
