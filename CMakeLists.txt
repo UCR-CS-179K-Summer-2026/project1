@@ -26,8 +26,11 @@ target_include_directories(streamline PRIVATE week2)
 add_executable(tests ${CORE_SOURCES} tests/correctness/tests.cpp)
 target_include_directories(tests PRIVATE week2)
 
-add_executable(benchmark ${CORE_SOURCES} tests/performance/benchmark.cpp)
-target_include_directories(benchmark PRIVATE week2)
+add_executable(benchmark_legacy ${CORE_SOURCES} tests/performance/benchmark.cpp)
+target_include_directories(benchmark_legacy PRIVATE week2)
+
+add_executable(benchmark_current ${CORE_SOURCES} tests/performance/benchmark_current.cpp)
+target_include_directories(benchmark_current PRIVATE week2)
 
 set(WEEK1_SOURCES
     week1/scanner.cpp
