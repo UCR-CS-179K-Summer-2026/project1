@@ -64,10 +64,15 @@ bool requireBoolean(const JSONValue& value) {
     return get<bool>(value.getValue());
 }
 
+// Sums a numeric field across `arr`, skipping records missing the field.
+// Returns {sum, count}; count == 0 means no usable values were found.
+pair<double, size_t> sumField(const ArrayValue& arr, const vector<string_view>& path);
+
 // Evaluates an expression node (from QueryParser's expression tree) against
-// one record. GetOperand nodes look up their path on `record`; StringOperand
-// /NumberOperand/BooleanOperand are literals; BinaryOperand recurses into
-// its two sides and applies the comparison or AND/OR.
+// one record. GetOperand nodes look up their path on `record`; AverageOperand
+// averages a numeric path across `record` (which must be an array);
+// StringOperand/NumberOperand/BooleanOperand are literals; BinaryOperand
+// recurses into its two sides and applies the comparison or AND/OR.
 JSONValue evaluateNode(NodeId id, const vector<ExpressionNode>& nodes, const JSONValue& record) {
     const ExpressionNode& node = nodes[id];
 
@@ -86,6 +91,17 @@ JSONValue evaluateNode(NodeId id, const vector<ExpressionNode>& nodes, const JSO
             throw runtime_error(result.error);
         }
         return *result.value;
+    }
+    if (holds_alternative<AverageOperand>(node)) {
+        const AverageOperand& avg = get<AverageOperand>(node);
+        if (record.getType() != ValueType::Array) {
+            throw runtime_error("AVERAGE() in an expression expects the current value to be an array");
+        }
+        auto [sum, count] = sumField(get<ArrayValue>(record.getValue()), avg.path);
+        if (count == 0) {
+            throw runtime_error("no numeric values found for AVERAGE");
+        }
+        return JSONValue(sum / static_cast<double>(count));
     }
 
     const BinaryOperand& bin = get<BinaryOperand>(node);
@@ -121,8 +137,6 @@ string groupKeyText(const JSONValue& value) {
     }
 }
 
-// Sums a numeric field across `arr`, skipping records missing the field.
-// Returns {sum, count}; count == 0 means no usable values were found.
 pair<double, size_t> sumField(const ArrayValue& arr, const vector<string_view>& path) {
     double sum = 0;
     size_t count = 0;
@@ -319,7 +333,7 @@ string excecuteQuery(Session& session, string query) {
 
         } else if (holds_alternative<Average>(function)) {
             const Average& avgFunc = get<Average>(function);
-            const GetOperand& target = get<GetOperand>(nodes[avgFunc.target]);
+            const AverageOperand& target = get<AverageOperand>(nodes[avgFunc.target]);
 
             try {
                 if (current.getType() == ValueType::Array) {

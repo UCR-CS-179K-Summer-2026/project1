@@ -47,6 +47,7 @@ struct StringOperand {string_view val;};
 struct NumberOperand {double val;};
 struct BooleanOperand {bool val;};
 struct GetOperand {vector<string_view> path;};
+struct AverageOperand {vector<string_view> path;};
 
 struct BinaryOperand {
     QueryTokenType op;
@@ -54,7 +55,7 @@ struct BinaryOperand {
     NodeId right;
 };
 
-using ExpressionNode = variant<BooleanOperand, StringOperand, NumberOperand, GetOperand, BinaryOperand>;
+using ExpressionNode = variant<AverageOperand, BooleanOperand, StringOperand, NumberOperand, GetOperand, BinaryOperand>;
 
 //The following structs are used to represent the functions in the query pipeline
 struct Get{NodeId target;};
@@ -97,7 +98,7 @@ class QueryParser {
     void parseFilter();
     void parseSort();
     void parseGroupBy();
-    void parseAverage();
+    NodeId parseAverage();
 
     NodeId parseExpression();
     NodeId parseLogicalOr();
