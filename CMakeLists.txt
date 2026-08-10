@@ -16,6 +16,7 @@ set(CORE_SOURCES
     week2/parser.cpp
     week2/file-reader.cpp
     week2/version.cpp
+    week2/query-parser.cpp
 )
 
 add_executable(streamline ${CORE_SOURCES} week2/main.cpp)
