@@ -11,6 +11,16 @@ endif()
 
 add_compile_options(-Wall -Wextra)
 
+find_path(READLINE_INCLUDE_DIR
+    NAMES readline/readline.h
+    HINTS /opt/homebrew/opt/readline/include /usr/local/opt/readline/include
+)
+
+find_library(READLINE_LIBRARY
+    NAMES readline
+    HINTS /opt/homebrew/opt/readline/lib /usr/local/opt/readline/lib
+)
+
 set(CORE_SOURCES
     week2/scanner.cpp
     week2/parser.cpp
@@ -22,6 +32,12 @@ set(CORE_SOURCES
 
 add_executable(streamline ${CORE_SOURCES} week2/main.cpp)
 target_include_directories(streamline PRIVATE week2)
+
+if(READLINE_INCLUDE_DIR AND READLINE_LIBRARY)
+    target_include_directories(streamline PRIVATE ${READLINE_INCLUDE_DIR})
+    target_link_libraries(streamline PRIVATE ${READLINE_LIBRARY})
+    target_compile_definitions(streamline PRIVATE STREAMLINE_READLINE)
+endif()
 
 add_executable(tests ${CORE_SOURCES} tests/correctness/tests.cpp)
 target_include_directories(tests PRIVATE week2)

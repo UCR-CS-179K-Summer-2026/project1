@@ -5,8 +5,14 @@
 #endif
 
 #include <algorithm>
+#include <cstdlib>
 #include <iostream>
 #include <utility>
+
+#ifdef STREAMLINE_READLINE
+#include <readline/history.h>
+#include <readline/readline.h>
+#endif
 
 using namespace std;
 
@@ -239,11 +245,24 @@ string normalizeCommand(const string& input) {
 }
 
 bool promptLine(const string& label, string& line) {
+#ifdef STREAMLINE_READLINE
+    char* input = readline(label.c_str());
+    if (!input) {
+        cout << "\n";
+        return false;
+    }
+    line = input;
+    if (!line.empty()) {
+        add_history(input);
+    }
+    free(input);
+#else
     cout << label;
     if (!getline(cin, line)) {
         cout << "\n";
         return false;
     }
+#endif
     line = trim(line);
     return true;
 }
