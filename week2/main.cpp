@@ -3,8 +3,151 @@
 #include <algorithm>
 #include <iostream>
 
+using namespace std;
+
 #include "file-reader.h"
+#include "session.h"
 #include "version.h"
+
+bool doUpload(Session& session);
+bool doSearch(Session& session);
+void runInteractive();
+void printUsage();
+void printBanner();
+void printBoxBorder(const string& left, const string& right);
+void printBoxLine(const string& text);
+void printMenu();
+string trim(const string& text);
+string toLower(const string& text);
+string normalizeCommand(const string& input);
+bool promptLine(const string& label, string& line);
+
+int main(int argc, char** argv) {
+    vector<string> args;
+
+    for (int i = 1; i < argc; i++) {
+        string arg = argv[i];
+        if (arg == "--help") {
+            printUsage();
+            return 0;
+        } else if (arg == "--version") {
+            cout << "streamline " << getVersionId() << "\n";
+            return 0;
+        } else {
+            args.push_back(arg);
+        }
+    }
+
+    if (args.empty()) {
+        runInteractive();
+        return 0;
+    }
+
+    if (args.size() != 2) {
+        cout << "streamline: need a file and a lookup expression\n\n";
+        printUsage();
+        return 1;
+    }
+
+    string path = args[0];
+    string query = args[1];
+    /*
+    vector<JSONValue> records;
+    try {
+        records = readFile(path);
+    } catch (const exception& e) {
+        cout << "streamline: " << e.what() << "\n";
+        return 1;
+    }
+
+    if (records.empty()) {
+        cout << "streamline: no records in " << path << "\n";
+        return 1;
+    }
+
+    for (const auto& record : records) {
+        printLookup(record, query);
+    }
+    */
+    return 0;
+}
+
+
+bool doUpload(Session& session) {
+    string path;
+    while (true) {
+        if (!promptLine("Enter path to your file: ", path)) {
+            return false;
+        }
+        if (path.empty()) {
+            return true;
+        }
+
+        uploadFile(path, session);
+
+        return true;
+    }
+}
+
+bool doSearch(Session& session) {
+    if (!session.isInitialized) {
+        cout << "Please upload a file first\n";
+        printMenu();
+        return true;
+    }
+
+    string query;
+    if (!promptLine("Enter your search query: ", query)) {
+        return false;
+    }
+    if (query.empty()) {
+        return true;
+    }
+
+    string result = excecuteQuery(session, query);
+    cout << result << endl;
+
+    return true;
+}
+
+void runInteractive() {
+    printBanner();
+    printMenu();
+
+    Session session;
+    string input;
+
+    while (true) {
+        //string prompt = session.loaded ? "[" + session.name + "] > " : "> ";
+        string prompt = "> ";
+        if (!promptLine(prompt, input)) {
+            break;
+        }
+
+        string command = normalizeCommand(input);
+        if (command.empty()) {
+            continue;
+        }
+
+        if (command == "q" || command == "quit") {
+            break;
+        } else if (command == "m" || command == "menu") {
+            printMenu();
+        } else if (command == "u" || command == "upload") {
+            if (!doUpload(session)) {
+                break;
+            }
+        } else if (command == "s" || command == "search") {
+            if (!doSearch(session)) {
+                break;
+            }
+        } else {
+            cout << "Unknown command. Enter \\m to view the menu.\n";
+        }
+    }
+
+    cout << "Thanks for choosing our program!\n";
+}
 
 const int BOX_WIDTH = 37;
 
@@ -80,15 +223,6 @@ string normalizeCommand(const string& input) {
     return command;
 }
 
-bool hasSupportedExtension(const string& path) {
-    string extension = toLower(filesystem::path(path).extension().string());
-    return extension == ".json" || extension == ".jsonl";
-}
-
-string fileName(const string& path) {
-    return filesystem::path(path).filename().string();
-}
-
 bool promptLine(const string& label, string& line) {
     cout << label;
     if (!getline(cin, line)) {
@@ -97,172 +231,4 @@ bool promptLine(const string& label, string& line) {
     }
     line = trim(line);
     return true;
-}
-
-struct Session {
-    vector<JSONValue> records;
-    string name;
-    bool loaded = false;
-};
-
-bool doUpload(Session& session) {
-    session.records.clear();
-    session.name.clear();
-    session.loaded = false;
-
-    string path;
-    while (true) {
-        if (!promptLine("Enter path to your file: ", path)) {
-            return false;
-        }
-        if (path.empty()) {
-            return true;
-        }
-
-        if (!hasSupportedExtension(path)) {
-            cout << "Only .json and .jsonl files are supported.\n";
-            continue;
-        }
-
-        vector<JSONValue> records;
-        try {
-            records = readFile(path);
-        } catch (const exception& e) {
-            cout << "streamline: " << e.what() << "\n";
-            continue;
-        }
-
-        if (records.empty()) {
-            cout << "No records could be read from " << fileName(path) << ".\n";
-            continue;
-        }
-
-        session.records.swap(records);
-        session.name = fileName(path);
-        session.loaded = true;
-
-        cout << "File " << session.name << " uploaded successfully. ("
-             << session.records.size()
-             << (session.records.size() == 1 ? " record)\n" : " records)\n");
-        return true;
-    }
-}
-
-void printLookup(const JSONValue& record, const string& query) {
-    LookupResult result = get(record, query);
-
-    if (result.ok && result.value->getType() == ValueType::String) {
-        cout << get<string>(result.value->getValue()) << "\n";
-    } else {
-        cout << formatResult(result) << "\n";
-    }
-}
-
-bool doSearch(Session& session) {
-    if (!session.loaded) {
-        cout << "Please upload a file first\n";
-        printMenu();
-        return true;
-    }
-
-    string query;
-    if (!promptLine("Enter your search query: ", query)) {
-        return false;
-    }
-    if (query.empty()) {
-        return true;
-    }
-
-    for (const auto& record : session.records) {
-        printLookup(record, query);
-    }
-    return true;
-}
-
-void runInteractive() {
-    printBanner();
-    printMenu();
-
-    Session session;
-    string input;
-
-    while (true) {
-        string prompt = session.loaded ? "[" + session.name + "] > " : "> ";
-        if (!promptLine(prompt, input)) {
-            break;
-        }
-
-        string command = normalizeCommand(input);
-        if (command.empty()) {
-            continue;
-        }
-
-        if (command == "q" || command == "quit") {
-            break;
-        } else if (command == "m" || command == "menu") {
-            printMenu();
-        } else if (command == "u" || command == "upload") {
-            if (!doUpload(session)) {
-                break;
-            }
-        } else if (command == "s" || command == "search") {
-            if (!doSearch(session)) {
-                break;
-            }
-        } else {
-            cout << "Unknown command. Enter m to view the menu.\n";
-        }
-    }
-
-    cout << "Thanks for choosing our program!\n";
-}
-
-int main(int argc, char** argv) {
-    vector<string> args;
-
-    for (int i = 1; i < argc; i++) {
-        string arg = argv[i];
-        if (arg == "--help") {
-            printUsage();
-            return 0;
-        } else if (arg == "--version") {
-            cout << "streamline " << getVersionId() << "\n";
-            return 0;
-        } else {
-            args.push_back(arg);
-        }
-    }
-
-    if (args.empty()) {
-        runInteractive();
-        return 0;
-    }
-
-    if (args.size() != 2) {
-        cout << "streamline: need a file and a lookup expression\n\n";
-        printUsage();
-        return 1;
-    }
-
-    string path = args[0];
-    string query = args[1];
-
-    vector<JSONValue> records;
-    try {
-        records = readFile(path);
-    } catch (const exception& e) {
-        cout << "streamline: " << e.what() << "\n";
-        return 1;
-    }
-
-    if (records.empty()) {
-        cout << "streamline: no records in " << path << "\n";
-        return 1;
-    }
-
-    for (const auto& record : records) {
-        printLookup(record, query);
-    }
-
-    return 0;
 }

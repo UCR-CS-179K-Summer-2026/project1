@@ -3,7 +3,7 @@
 // against the resulting tree.
 #include "file-reader.h"
 
-vector<JSONValue> readFile(const string& path) {
+void uploadFile(const string& path, Session& session) {
     ifstream file(path);
     if (!file.is_open()) {
         throw runtime_error(
@@ -24,55 +24,67 @@ vector<JSONValue> readFile(const string& path) {
     buffer << file.rdbuf();
     string contents = buffer.str();
 
+    JSONValue temp = JSONValue(nullptr);
+
     if(extension == ".jsonl") {
-        return readJsonlFile(contents);
+        //session.updateFile(contents, ParserType::JSONL);
+        Parser p(contents, ParserType::JSONL);
+        temp = p.parse();
     } else {
-        return readJsonFile(contents);
+        //session.updateFile(contents, ParserType::JSON);
+        Parser p(contents, ParserType::JSON);
+        temp = p.parse();
     }
+
+    session.initialize(temp);
 }
 
-vector<JSONValue> readJsonlFile(const string& contents) {
-    vector<JSONValue> records;
-    string line;
-    int lineNumber = 0;
+string excecuteQuery(Session& session, string query) {
+    cout << "Excecuting query..." << endl;
 
-    istringstream stream(contents);
+    QueryParser q(query);
+    q.parse();
 
-    try {
-        while (getline(stream, line)) {
-            ++lineNumber;
+    const vector<QueryFunction>& pipeline = q.getFunctions();
+    const vector<ExpressionNode>& nodes = q.getExpressionNodes();
 
-            if (line.find_first_not_of(" \t\r\n") == string::npos) {
-                continue;
+    JSONValue current = session.file;
+
+    for (const QueryFunction& function : pipeline) {
+        if (holds_alternative<Get>(function)) {
+            const Get& getFunc = get<Get>(function);
+            const GetOperand& operand = get<GetOperand>(nodes[getFunc.target]);
+
+            LookupResult result = get(current, operand.path);
+            if (!result.ok) {
+                return formatResult(result);
             }
+            current = *result.value;
 
-            Parser parser(line, ParserType::JSONL);
-            records.push_back(parser.parse());
+        } else if (holds_alternative<Filter>(function)) {
+            // TODO: FILTER - keep only the records/entries in `current` for
+            // which the condition expression (nodes[filter.condition])
+            // evaluates to true.
+
+        } else if (holds_alternative<Sort>(function)) {
+            // TODO: SORT - reorder the entries in `current` by the value at
+            // sort.target, ascending or descending per sort.direction.
+
+        } else if (holds_alternative<Limit>(function)) {
+            // TODO: LIMIT - truncate `current` down to at most limit.size
+            // entries.
+
+        } else if (holds_alternative<GroupBy>(function)) {
+            // TODO: GROUPBY - bucket the entries in `current` by the value
+            // at groupBy.target.
+
+        } else if (holds_alternative<Average>(function)) {
+            // TODO: AVERAGE - compute the mean of the numeric values at
+            // average.target across the entries in `current`.
         }
-    } catch (const exception& e) {
-        cerr << "Warning: failed to parse (" << e.what() << " at line " << lineNumber << ")\n";
-        return {};
     }
 
-    return records;
-}
-
-vector<JSONValue> readJsonFile(const string& contents) {
-    vector<JSONValue> records;
-
-    try {
-        Parser parser(contents, ParserType::JSON);
-        JSONValue doc = parser.parse();
-        if (doc.getType() == ValueType::Array) {
-            records = get<ArrayValue>(doc.getValue());
-        } else {
-            records.push_back(move(doc));
-        }
-    } catch (const exception& e) {
-        cerr << "Warning: failed to parse JSON file (" << e.what() << ")\n";
-    }
-
-    return records;
+    return formatResult({true, &current, ""});
 }
 
 namespace {
@@ -81,7 +93,10 @@ LookupResult error(const string& message) {
     return {false, nullptr, message};
 }
 
-string formatValue(const JSONValue& value) {
+string formatValue(const JSONValue& value, int depth = 0) {
+    string indent(depth + 1, ' ');
+    string closeIndent(depth, ' ');
+
     switch (value.getType()) {
         case ValueType::Null:
             return "null";
@@ -96,28 +111,39 @@ string formatValue(const JSONValue& value) {
             return "\"" + get<string>(value.getValue()) + "\"";
         case ValueType::Object: {
             const auto& obj = get<ObjectValue>(value.getValue());
+            if (obj.empty()) return "{}";
             ostringstream out;
-            out << "{";
+            out << "{\n";
             for (size_t i = 0; i < obj.size(); ++i) {
-                if (i > 0) out << ",";
-                out << "\"" << obj[i].first << "\":" << formatValue(obj[i].second);
+                if (i > 0) out << ",\n";
+                out << indent << "\"" << obj[i].first << "\": " << formatValue(obj[i].second, depth + 1);
             }
-            out << "}";
+            out << "\n" << closeIndent << "}";
             return out.str();
         }
         case ValueType::Array: {
             const auto& arr = get<ArrayValue>(value.getValue());
+            if (arr.empty()) return "[]";
             ostringstream out;
-            out << "[";
+            out << "[\n";
             for (size_t i = 0; i < arr.size(); ++i) {
-                if (i > 0) out << ",";
-                out << formatValue(arr[i]);
+                if (i > 0) out << ",\n";
+                out << indent << formatValue(arr[i], depth + 1);
             }
-            out << "]";
+            out << "\n" << closeIndent << "]";
             return out.str();
         }
     }
     return "null";
+}
+
+string formatValue(const vector<JSONValue>& values) {
+    ostringstream out;
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (i > 0) out << "\n";
+        out << formatValue(values[i]);
+    }
+    return out.str();
 }
 
 }  // namespace
@@ -169,79 +195,6 @@ LookupResult get(const JSONValue& value, const vector<string_view>& path) {
     return {true, current, ""};
 }
 
-LookupResult get(const JSONValue& value, const string& path) {
-    vector<pair<bool, string>> parts;
-    size_t i = 0;
-
-    while (i < path.size()) {
-        if (path[i] == '.') {
-            ++i;
-            size_t start = i;
-            while (i < path.size() && path[i] != '.' && path[i] != '[') ++i;
-            parts.push_back({false, path.substr(start, i - start)});
-        } else if (path[i] == '[') {
-            ++i;
-            size_t start = i;
-            while (i < path.size() && path[i] != ']') ++i;
-            if (i >= path.size()) {
-                return error("missing closing ']' in path");
-            }
-            parts.push_back({true, path.substr(start, i - start)});
-            ++i;
-        } else {
-            return error("invalid path syntax at position " + to_string(i));
-        }
-    }
-
-    const JSONValue* current = &value;
-
-    for (const auto& part : parts) {
-        const string& text = part.second;
-
-        if (!part.first) {
-            if (current->getType() != ValueType::Object) {
-                return error("expected an object to look up field '" + text + "'");
-            }
-            const auto& obj = get<ObjectValue>(current->getValue());
-
-            const JSONValue* found = nullptr;
-            for (const auto& entry : obj) {
-                if (entry.first == text) {
-                    found = &entry.second;
-                    break;
-                }
-            }
-            if (!found) {
-                return error("field '" + text + "' not found");
-            }
-            current = found;
-        } else {
-            size_t parsedLen = 0;
-
-            int index;
-            try {
-                index = stoi(text, &parsedLen);
-            } catch (const exception&) {
-                return error("invalid array index '" + text + "'");
-            }
-            if (parsedLen != text.size()) {
-                return error("invalid array index '" + text + "'");
-            }
-
-            if (current->getType() != ValueType::Array) {
-                return error("expected an array to index with [" + text + "]");
-            }
-            const auto& arr = get<ArrayValue>(current->getValue());
-
-            if (index < 0 || static_cast<size_t>(index) >= arr.size()) {
-                return error("index " + text + " out of range");
-            }
-            current = &arr[static_cast<size_t>(index)];
-        }
-    }
-
-    return {true, current, ""};
-}
 string formatResult(const LookupResult& result) {
     if (!result.ok) {
         return "Error: " + result.error;
