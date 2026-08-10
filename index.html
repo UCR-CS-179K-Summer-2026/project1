@@ -139,6 +139,12 @@
         margin: 0 0 0.3rem;
         font-size: 0.95rem;
       }
+      .pipeline .stage h4 code {
+        background: none;
+        padding: 0;
+        border-radius: 0;
+        font-size: 1em;
+      }
       .pipeline .stage .owner {
         font-size: 0.8rem;
         color: var(--accent);
@@ -340,7 +346,6 @@
       <div class="links">
         <a href="https://github.com/UCR-CS-179K-Summer-2026/project1">Repo</a>
         <a href="https://github.com/UCR-CS-179K-Summer-2026/project1/blob/main/README.md">README</a>
-        <a href="https://github.com/UCR-CS-179K-Summer-2026/project1/blob/main/week1/PLAN.md">Sprint 1 Plan</a>
       </div>
     </header>
 
@@ -364,7 +369,7 @@
           Streamline is built around <strong>two independent parsers</strong>, not one. The
           first is the JSON parser from Sprint 1 — a <strong>Scanner</strong> tokenizes raw
           text and a <strong>Parser</strong> builds a tree of <code>JSONValue</code> nodes
-          (each one a tagged <code>std::variant</code>). The second, added this sprint, is a
+          (each one a tagged <code>std::variant</code>). The second, is a
           completely separate <strong>query-language parser</strong> — its own
           <code>QueryScanner</code> and <code>QueryParser</code> — that turns a query string
           like <code>FILTER(GET("gpa") &gt; 3.5) | LIMIT(5)</code> into an expression tree,
@@ -417,8 +422,8 @@
             <h4>QueryScanner / QueryParser</h4>
             <ul>
               <li><code>query-parser.h</code> / <code>.cpp</code></li>
-              <li>tokenizes <code>FILTER</code>/<code>SORT</code>/<code>GROUPBY</code>/…</li>
-              <li>recursive-descent — comparisons, <code>AND</code>/<code>OR</code></li>
+              <li>tokenizes <code>FILTER</code> / <code>SORT</code> / <code>GROUPBY</code> / …</li>
+              <li>recursive-descent — comparisons, <code>AND</code> / <code>OR</code></li>
             </ul>
           </div>
           <div class="arrow">&#8594;</div>
@@ -438,7 +443,7 @@
             <ul>
               <li><code>file-reader.cpp</code></li>
               <li>walks each <code>QueryFunction</code> in order</li>
-              <li>evaluates <code>FILTER</code>/<code>SORT</code>/<code>LIMIT</code>/<code>GROUPBY</code>/<code>AVERAGE</code></li>
+              <li>evaluates <code>FILTER</code> / <code>SORT</code> / <code>LIMIT</code> / <code>GROUPBY</code> / <code>AVERAGE</code></li>
             </ul>
           </div>
         </div>
@@ -462,9 +467,9 @@
             <div class="owner">Jules</div>
             <h4>JSON parser, escaping &amp; query grammar</h4>
             <ul>
-              <li><code>Scanner</code>/<code>Parser</code> for JSON, and the strict escape/control-character validation on top</li>
+              <li><code>Scanner</code> / <code>Parser</code> for JSON, and the strict escape/control-character validation on top</li>
               <li>Fixed <code>\uXXXX</code> decoding to correctly combine surrogate pairs and UTF-8-encode the result — emoji now decode and compare correctly</li>
-              <li>Designed and built <code>QueryScanner</code>/<code>QueryParser</code> — the tokenizer and recursive-descent grammar for the query language itself, including <code>AND</code>/<code>OR</code></li>
+              <li>Designed and built <code>QueryScanner</code> / <code>QueryParser</code> — the tokenizer and recursive-descent grammar for the query language itself, including <code>AND</code> / <code>OR</code></li>
             </ul>
           </div>
           <div class="card">
@@ -553,7 +558,7 @@
             <tr>
               <td>Extensibility</td>
               <td>Add a new <code>ValueType</code> by adding a new subclass</td>
-              <td>Add a new <code>ValueType</code> by adding a variant alternative (touches every <code>switch</code>/<code>visit</code>, which the compiler flags as non-exhaustive)</td>
+              <td>Add a new <code>ValueType</code> by adding a variant alternative (touches every <code>switch</code> / <code>visit</code>, which the compiler flags as non-exhaustive)</td>
             </tr>
           </tbody>
         </table>
@@ -569,7 +574,7 @@
           value, drops the vtable pointer entirely, and keeps sibling values next to each
           other in memory. Since our whole premise (per the README) is staying fast and
           low-memory on large files, that tradeoff was worth making even though it meant
-          giving up some of the OOP ergonomics — <code>isString()</code>/<code>isArray()</code>-style
+          giving up some of the OOP ergonomics — <code>isString()</code> / <code>isArray()</code>-style
           helpers, for example, are gone, replaced by a single <code>switch(getType())</code>
           at each call site.
         </p>
@@ -613,7 +618,7 @@
           — so a comparison, an <code>AND</code>, and an <code>OR</code> are all the same struct,
           and evaluating one just means recursively evaluating whatever nodes its <code>left</code>
           and <code>right</code> point at. A separate <code>QueryFunction</code> variant
-          (<code>Get</code>/<code>Filter</code>/<code>Sort</code>/<code>Limit</code>/<code>GroupBy</code>/<code>Average</code>)
+          (<code>Get</code> / <code>Filter</code> / <code>Sort</code> / <code>Limit</code> / <code>GroupBy</code> / <code>Average</code>)
           represents the pipeline stages themselves, each one pointing into this same node
           vector for whatever expression it needs (a <code>FILTER</code>'s condition, a
           <code>SORT</code>'s target field, and so on).
@@ -671,7 +676,7 @@ public:
 };</code></pre>
 
         <h3>Query parser (Jules)</h3>
-        <p class="muted">Its own recursive-descent grammar, entirely separate from the JSON parser above. <code>parsePipeline()</code> splits on <code>|</code>; each stage's <code>parseFilter()</code>/<code>parseSort()</code>/etc. builds <code>ExpressionNode</code>s as needed and pushes one <code>QueryFunction</code>.</p>
+        <p class="muted">Its own recursive-descent grammar, entirely separate from the JSON parser above. <code>parsePipeline()</code> splits on <code>|</code>; each stage's <code>parseFilter()</code> / <code>parseSort()</code>/etc. builds <code>ExpressionNode</code>s as needed and pushes one <code>QueryFunction</code>.</p>
         <pre><code>class QueryParser {
 public:
     explicit QueryParser(string_view query);
@@ -794,7 +799,7 @@ $ ./streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'</code
 
         <div class="feature">
           <h3>Filter &amp; Comparison <span class="status done">done</span></h3>
-          <p>Keep only the records matching a boolean expression — comparisons combine with <code>AND</code>/<code>OR</code>, not just one condition.</p>
+          <p>Keep only the records matching a boolean expression — comparisons combine with <code>AND</code> / <code>OR</code>, not just one condition.</p>
           <dl>
             <dt>Query</dt><dd><code>FILTER(GET("a") &gt; 1)</code></dd>
             <dt>JSON</dt><dd><code>[{"a": 1, "b": 2}, {"a": 2, "b": 2}]</code></dd>
@@ -883,7 +888,7 @@ $ ./streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'</code
         <p class="muted">
           <code>JSONValue</code> is a value type (a tagged <code>variant</code>), and
           sub-trees live directly inside their parent's <code>vector</code>
-          (<code>ArrayValue</code>/<code>ObjectValue</code>). They're still
+          (<code>ArrayValue</code> / <code>ObjectValue</code>). They're still
           <code>std::move</code>d into place as they're built rather than copied, so
           building the tree doesn't duplicate data — it just no longer requires a heap
           allocation (<code>unique_ptr</code>) per node the way the earlier polymorphic
@@ -894,7 +899,7 @@ $ ./streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'</code
         <p class="muted">
           <code>readFile()</code> now reads the entire file into an in-memory
           <code>std::string</code> (<code>ostringstream buffer; buffer &lt;&lt; file.rdbuf();</code>)
-          before <code>readJsonlFile()</code>/<code>readJsonFile()</code> parse it —
+          before <code>readJsonlFile()</code> / <code>readJsonFile()</code> parse it —
           <code>.jsonl</code> is still parsed one line at a time via a fresh
           <code>Parser</code> per line, but that line comes out of the buffered string
           rather than being streamed with <code>std::getline</code> straight off the file
@@ -933,9 +938,9 @@ $ ./streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'</code
         </div>
 
         <div class="callout">
-          <strong>Not yet optimized:</strong> <code>FILTER</code>/<code>GROUPBY</code> still
+          <strong>Not yet optimized:</strong> <code>FILTER</code> / <code>GROUPBY</code> still
           deep-copy every matching <code>JSONValue</code> into the result set, rather than
-          carrying indices/pointers until the very end. <code>lookup()</code>/<code>get()</code>
+          carrying indices/pointers until the very end. <code>lookup()</code> / <code>get()</code>
           still does a linear scan over an object's entries for every field access — fine at
           typical object sizes, a candidate to revisit if that stops being true.
         </div>
@@ -1107,7 +1112,7 @@ cmake --build build
           <div class="entry">
             <div class="date">Jul 28–29</div>
             <h4>First working parser</h4>
-            <p>Data-model concepts, a rough <code>Scanner</code>/<code>Parser</code> draft, and the first merge between branches to get end-to-end parsing working.</p>
+            <p>Data-model concepts, a rough <code>Scanner</code> / <code>Parser</code> draft, and the first merge between branches to get end-to-end parsing working.</p>
           </div>
           <div class="entry">
             <div class="date">Jul 30</div>
@@ -1140,7 +1145,7 @@ cmake --build build
           <div class="entry">
             <div class="date">Aug 5&ndash;7</div>
             <h4>Two competing query engines, in parallel</h4>
-            <p>A regex-based query engine and Jules's tokenizer/AST-based <code>QueryParser</code> were built independently on separate branches at the same time. When they merged, the AST-based design — with real <code>AND</code>/<code>OR</code> support — is what moved forward.</p>
+            <p>A regex-based query engine and Jules's tokenizer/AST-based <code>QueryParser</code> were built independently on separate branches at the same time. When they merged, the AST-based design — with real <code>AND</code> / <code>OR</code> support — is what moved forward.</p>
           </div>
           <div class="entry">
             <div class="date">Aug 8&ndash;9</div>
@@ -1149,7 +1154,7 @@ cmake --build build
           </div>
           <div class="entry">
             <div class="date">Aug 9</div>
-            <h4><code>FILTER</code>/<code>SORT</code>/<code>LIMIT</code>/<code>GROUPBY</code>/<code>AVERAGE</code> implemented <span class="status done">done</span></h4>
+            <h4><code>FILTER</code> / <code>SORT</code> / <code>LIMIT</code> / <code>GROUPBY</code> / <code>AVERAGE</code> implemented <span class="status done">done</span></h4>
             <p>All five were parsing correctly but executing as no-op stubs. Implemented against the expression tree, with sort-key precomputation and hash-map grouping — see <a href="#algorithms">Algorithms &amp; Optimizations</a> — plus fixes for three crash bugs found while testing them against real data.</p>
           </div>
           <div class="entry">
