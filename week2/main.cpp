@@ -1,18 +1,13 @@
-// The sluice command line tool. Reads a JSON/JSONL file and runs a lookup
-// on every record in it.
-//
-// Build:
-//   g++ -std=c++20 -Wall -Wextra scanner.cpp parser.cpp query-parser.cpp file-reader.cpp main.cpp -o sluice
-// Run:
-//   ./sluice students.jsonl ".student.name"
-#include "file-reader.h"
-#include "session.h"
-
+// The Streamline command line tool. Reads a JSON/JSONL file and runs a
+// lookup on every record in it. See the README for how to build and run it.
 #include <algorithm>
 #include <iostream>
-#include <memory>
 
 using namespace std;
+
+#include "file-reader.h"
+#include "session.h"
+#include "version.h"
 
 bool doUpload(Session& session);
 bool doSearch(Session& session);
@@ -35,15 +30,48 @@ int main(int argc, char** argv) {
         if (arg == "--help") {
             printUsage();
             return 0;
+        } else if (arg == "--version") {
+            cout << "streamline " << getVersionId() << "\n";
+            return 0;
         } else {
             args.push_back(arg);
         }
     }
 
-    runInteractive();
+    if (args.empty()) {
+        runInteractive();
+        return 0;
+    }
 
+    if (args.size() != 2) {
+        cout << "streamline: need a file and a lookup expression\n\n";
+        printUsage();
+        return 1;
+    }
+
+    string path = args[0];
+    string query = args[1];
+    /*
+    vector<JSONValue> records;
+    try {
+        records = readFile(path);
+    } catch (const exception& e) {
+        cout << "streamline: " << e.what() << "\n";
+        return 1;
+    }
+
+    if (records.empty()) {
+        cout << "streamline: no records in " << path << "\n";
+        return 1;
+    }
+
+    for (const auto& record : records) {
+        printLookup(record, query);
+    }
+    */
     return 0;
 }
+
 
 bool doUpload(Session& session) {
     string path;
@@ -124,20 +152,20 @@ void runInteractive() {
 const int BOX_WIDTH = 37;
 
 void printUsage() {
-    cout << "usage: sluice <file.json|file.jsonl> \"<lookup expression>\"\n"
-         << "       sluice students.jsonl \".student.name\"\n\n"
-         << "run sluice with no arguments to open the menu\n\n"
+    cout << "usage: streamline <file.json|file.jsonl> \"<lookup expression>\"\n"
+         << "       streamline students.jsonl \".student.name\"\n\n"
+         << "       streamline --version\n\n"
+         << "run streamline with no arguments to open the menu\n\n"
          << "lookup expressions look like .name, .student.name, or .scores[0]\n";
 }
 
 void printBanner() {
     cout << "\n"
          << "        W E L C O M E   T O\n"
-         << "     ██ ███████  ██████  ███    ██\n"
-         << "     ██ ██      ██    ██ ████   ██\n"
-         << "     ██ ███████ ██    ██ ██ ██  ██\n"
-         << "██   ██      ██ ██    ██ ██  ██ ██\n"
-         << " █████  ███████  ██████  ██   ████\n"
+         << "▄▀▀▀▀ ▀▀█▀▀ █▀▀▀▄ █▀▀▀▀ ▄▀▀▀▄ █▄ ▄█ █     ▀█▀ █▄  █ █▀▀▀▀\n"
+         << "▀▄▄▄    █   █▄▄▄▀ █▄▄▄  █   █ █ █ █ █      █  █ █ █ █▄▄▄ \n"
+         << "    █   █   █ ▀▄  █     █▀▀▀█ █   █ █      █  █  ▀█ █    \n"
+         << "▀▄▄▄▀   █   █  ▀▄ █▄▄▄▄ █   █ █   █ █▄▄▄▄ ▄█▄ █   █ █▄▄▄▄\n"
          << "\n"
          << "     by Javier, Jules and Ryan\n";
 }
@@ -162,10 +190,10 @@ void printMenu() {
     cout << "\n";
     printBoxBorder("┌", "┐");
     printBoxLine("  MENU");
-    printBoxLine("    \\u   upload a .json/.jsonl file");
-    printBoxLine("    \\s   search & query your file");
-    printBoxLine("    \\m   view this menu");
-    printBoxLine("    \\q   quit");
+    printBoxLine("    u   upload a .json/.jsonl file");
+    printBoxLine("    s   search & query your file");
+    printBoxLine("    m   view this menu");
+    printBoxLine("    q   quit");
     printBoxBorder("└", "┘");
     cout << "\n";
 }

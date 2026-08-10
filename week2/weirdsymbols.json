@@ -1,0 +1,13 @@
+{
+    "name": "Alice",
+    ".": "Bob",
+    "\"": "Charlie",
+    "\u0061": "David",
+}
+
+
+// unicode after string should display actual character. - [create test bob\uA7A*  =bobe 65A has to convert to hex
+
+//null byte /0 often treated as stop 
+
+//emoji [ryan create test]
