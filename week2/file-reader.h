@@ -1,6 +1,8 @@
 #pragma once
 
 #include "parser.h"
+#include "query-parser.h"
+#include "session.h"
 #include "value.h"
 
 #include <filesystem>
@@ -13,6 +15,9 @@
 #include <vector>
 
 using namespace std;
+
+void uploadFile(const string& path, Session& session);
+void uploadQuery(const string& query, Session& session);
 
 vector<JSONValue> readFile(const string& path);
 
@@ -37,6 +42,8 @@ struct LookupResult {
     const JSONValue* value;  // valid when ok == true
     string error;            // valid when ok == false, e.g. "field 'name' not found"
 };
+
+string excecuteQuery(Session& session, string query);
 
 // Looks up a property (or nested path of properties/indices) inside a
 // JSONValue tree, per the arguments to a GET(...) call, e.g.:
