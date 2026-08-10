@@ -214,7 +214,8 @@ void QueryParser::parsePipeline() {
             } else if(funcName == "GROUPBY") {
                 parseGroupBy();
             } else if(funcName == "AVERAGE") {
-                parseAverage();
+                NodeId node = parseAverage();
+                functions.push_back(Average{node});
             } else {
                 throw runtime_error("Unknown function: " + string(funcName));
             }
@@ -353,23 +354,29 @@ void QueryParser::parseGroupBy() {
     functions.push_back(GroupBy{target});
 }
 
-void QueryParser::parseAverage() {
+NodeId QueryParser::parseAverage() {
     if(!expect(QueryTokenType::LParen)) {
         throw runtime_error("Expected '(' after AVERAGE");
     }
 
-    if(!expect(QueryTokenType::Identifier)) {
-        if(currToken.value != "GET") {
-            throw runtime_error("Expected GET(...) as target for AVERAGE");
+    NodeId target;
+    if(currToken.type == QueryTokenType::RParen) {
+        target = allocateGet({});  // AVERAGE() with no args targets the current JSON value
+    } else {
+        if(!expect(QueryTokenType::Identifier)) {
+            if(currToken.value != "GET") {
+                throw runtime_error("Expected GET(...) as target for AVERAGE");
+            }
         }
+        target = parseGet();
     }
-    NodeId target = parseGet();
 
     if(!expect(QueryTokenType::RParen)) {
         throw runtime_error("Expected ')' after AVERAGE target");
     }
 
-    functions.push_back(Average{target});
+    vector<string_view> path = get<GetOperand>(expressionNodes[target]).path;
+    return allocateNode(AverageOperand{move(path)});
 }
 
 NodeId QueryParser::parseExpression() {
@@ -448,6 +455,10 @@ NodeId QueryParser::parseOperand() {
         }
 
         case QueryTokenType::Identifier: {
+            if(currToken.value == "AVERAGE") {
+                advance();
+                return parseAverage();
+            }
             if(currToken.value != "GET") {
                 throw runtime_error("Unexpected identifier in expression: " + string(currToken.value));
             }
