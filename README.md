@@ -34,15 +34,13 @@ cmake --build build
 ```
 
 The main binaries in `build/` are `streamline` (the CLI), `tests` (the
-correctness suite), `benchmark_legacy` (the legacy benchmark), and
-`benchmark_current` (the current query benchmark). Run them from the repo
-root.
+correctness suite), and `benchmark` (the performance benchmark). Run them
+from the repo root.
 
 ```sh
 ./build/streamline        # opens the menu
 ./build/tests             # runs the test suite
-./build/benchmark_legacy  # runs the legacy benchmark
-./build/benchmark_current # runs the current query benchmark
+./build/benchmark         # runs the performance benchmark
 ```
 
 The test suite reads its sample files from `tests/data`, and that path is
@@ -118,12 +116,11 @@ log will use these IDs to compare speed changes between versions.
 This system labels builds for performance comparisons. Git is still used
 separately for source history, branches, and restoring old code.
 
-## Benchmarks
+## Benchmark
 
-Both Week 2 benchmarks use `json/students.json`, which is a 50 MB file with
-85,032 records. The legacy benchmark uses the older `readFile()` and
-string-path `get()` interfaces. The current benchmark uses `uploadFile()`,
-`Session`, and the current query pipeline to run `AVERAGE(GET("gpa"))`.
+The Week 2 benchmark uses `json/students.json`, which is a 50 MB file with
+85,032 records. It uses `uploadFile()`, `Session`, and the current query
+pipeline to run `AVERAGE(GET("gpa"))`.
 
 Build in Release mode and run the correctness tests first:
 
@@ -133,27 +130,19 @@ cmake --build build
 ./build/tests tests/data
 ```
 
-Run both benchmarks from the repository root:
+Run the benchmark from the repository root:
 
 ```sh
-./build/benchmark_legacy
-./build/benchmark_current
+./build/benchmark
 ```
 
-Each benchmark has one warm-up run followed by five measured runs. The last
+The benchmark has one warm-up run followed by five measured runs. The last
 row contains the median total time. Results are printed as CSV with the
-benchmark name, version, dataset, query, record count, and times in
-milliseconds.
+version, dataset, query, record count, and times in milliseconds.
 
-The legacy benchmark measures a stable older interface, but it still
-uses the code in the current build. It does not automatically run an older
-source version. The current benchmark measures the same session and query
-execution path used by the CLI.
-
-Compare each benchmark only with the same benchmark from another version.
-Do not compare the legacy time directly with the current query time
-because they do different work. Results from different versions should use
-the same computer, build type, and dataset.
+The benchmark measures the same session and query execution path used by the
+CLI. Compare results from different versions using the same computer, build
+type, and dataset.
 
 ## Major Features
 
