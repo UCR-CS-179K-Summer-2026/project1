@@ -94,6 +94,11 @@ bool doUpload(CliState& state) {
             return true;
         }
 
+        if(path == "q" || path == "quit") {
+            printMenu();
+            return true;
+        }
+
         CliState uploaded;
         try {
             loadSessionFile(path, uploaded.session, uploaded.name, uploaded.recordCount);
@@ -117,6 +122,7 @@ bool doSearch(CliState& state) {
         return true;
     }
 
+    cout << endl << "Querying " << state.name << ". Enter q to exit query mode." << endl;
     while (true) {
         string query;
         if (!promptLine("Enter your search query: ", query)) {
@@ -124,10 +130,12 @@ bool doSearch(CliState& state) {
         }
 
         string command = normalizeCommand(query);
-        if (command == "q" || command == "quit") {
-            return false;
-        }
-        if (query.empty()) {
+        if(command == "u" || command == "upload") {
+            doUpload(state);
+        } else if (command == "q" || command == "quit") {
+            printMenu();
+            return true;
+        } else if (query.empty()) {
             continue;
         }
 
