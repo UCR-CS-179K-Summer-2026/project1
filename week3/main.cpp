@@ -117,20 +117,26 @@ bool doSearch(CliState& state) {
         return true;
     }
 
-    string query;
-    if (!promptLine("Enter your search query: ", query)) {
-        return false;
-    }
-    if (query.empty()) {
-        return true;
-    }
+    while (true) {
+        string query;
+        if (!promptLine("Enter your search query: ", query)) {
+            return false;
+        }
 
-    try {
-        cout << excecuteQuery(state.session, query) << "\n";
-    } catch (const exception& e) {
-        cout << "streamline: " << e.what() << "\n";
+        string command = normalizeCommand(query);
+        if (command == "q" || command == "quit") {
+            return false;
+        }
+        if (query.empty()) {
+            continue;
+        }
+
+        try {
+            cout << excecuteQuery(state.session, query) << "\n";
+        } catch (const exception& e) {
+            cout << "streamline: " << e.what() << "\n";
+        }
     }
-    return true;
 }
 
 void runInteractive() {
@@ -157,6 +163,9 @@ void runInteractive() {
             printMenu();
         } else if (command == "u" || command == "upload") {
             if (!doUpload(state)) {
+                break;
+            }
+            if (state.session.isInitialized && !doSearch(state)) {
                 break;
             }
         } else if (command == "s" || command == "search") {

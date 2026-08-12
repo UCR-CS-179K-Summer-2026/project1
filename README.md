@@ -28,33 +28,33 @@ C++
 
 Requires CMake 3.16+ and a C++17 compiler.
 
-On macOS, install Readline for arrow-key history and command editing:
+On macOS, install Readline if you want to use the arrow keys to go through
+past commands:
 
 ```sh
 brew install readline
 ```
 
-The CLI still builds without Readline, but uses basic line input instead.
-Use `Command+V` to paste in a macOS terminal.
+The program still builds without Readline, but the input will be more basic.
+Use `Command+V` to paste into the terminal.
 
 ```sh
 cmake -B build
 cmake --build build
 ```
 
-The main binaries in `build/` are `streamline` (the CLI), `tests` (the
-correctness suite), and `benchmark` (the performance benchmark). Run them
-from the repo root.
+The build creates three programs: `streamline` for the CLI, `tests` for the
+correctness tests, and `benchmark` for the performance test. Run them from
+the main project folder.
 
 ```sh
-./build/streamline        # opens the menu
-./build/tests             # runs the test suite
-./build/benchmark         # runs the performance benchmark
+./build/streamline
+./build/tests
+./build/benchmark
 ```
 
-The test suite reads its sample files from `tests/data`, and that path is
-resolved against your current directory — so run it from the repo root, or
-pass the directory yourself with `./build/tests path/to/tests/data`.
+The tests use the sample files in `tests/data`. Run the tests from the main
+project folder, or give the test program the path to the data folder.
 
 ## Using the CLI
 
@@ -67,19 +67,18 @@ Start it with no arguments and you get a menu:
 | `m`     | show the menu again             |
 | `q`     | quit                            |
 
-Upload a file once and you can run as many queries against it as you want
-— the records stay loaded, so `s` doesn't re-read the file each time.
+After a file uploads, the program goes straight to the query prompt. When a
+query finishes, just type the next one. The file stays loaded instead of being
+read again each time. Type `q` or `quit` when you are done.
 
 ```
 > u
 Enter path to your file: week1/students.json
-> s
 Enter your search query: GET("student", 0, "name")
 "Ryan"
-> s
 Enter your search query: GET("student", 1, "scores", 0)
 95
-> q
+Enter your search query: q
 Thanks for choosing our program!
 ```
 
@@ -88,18 +87,17 @@ followed. Other operations can be joined with `|` to form a query pipeline.
 
 ## Version Control & Benchmarking
 
-Builds are labeled with a version ID (`week<N>-v<N>`) so performance can be
-compared across optimizations, and a separate benchmark binary measures
-that performance against a large sample dataset.
+Each version used for performance testing gets an ID such as `week3-v1`.
+This makes it clear which version produced each benchmark result. The
+benchmark uses the same file loading and query code as the CLI.
 
 ```sh
-./build/streamline --version   # check the current version ID
-./build/benchmark               # run the performance benchmark
+./build/streamline --version
+./build/benchmark
 ```
 
-The versioning scheme, the workflow for measuring an optimization, the
-benchmark's methodology, and how to compare results across versions are
-documented on the [design page](https://ucr-cs-179k-summer-2026.github.io/project1/#versioning).
+More information about the version IDs and benchmark process is on the
+[design page](https://ucr-cs-179k-summer-2026.github.io/project1/#versioning).
 
 ## Major Features
 

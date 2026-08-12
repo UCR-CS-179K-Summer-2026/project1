@@ -9,7 +9,11 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-add_compile_options(-Wall -Wextra)
+if(MSVC)
+    add_compile_options(/w)
+else()
+    add_compile_options(-w)
+endif()
 
 find_path(READLINE_INCLUDE_DIR
     NAMES readline/readline.h
@@ -22,16 +26,16 @@ find_library(READLINE_LIBRARY
 )
 
 set(CORE_SOURCES
-    week2/scanner.cpp
-    week2/parser.cpp
-    week2/file-reader.cpp
-    week2/integration.cpp
-    week2/version.cpp
-    week2/query-parser.cpp
+    week3/scanner.cpp
+    week3/parser.cpp
+    week3/file-reader.cpp
+    week3/integration.cpp
+    week3/version.cpp
+    week3/query-parser.cpp
 )
 
-add_executable(streamline ${CORE_SOURCES} week2/main.cpp)
-target_include_directories(streamline PRIVATE week2)
+add_executable(streamline ${CORE_SOURCES} week3/main.cpp)
+target_include_directories(streamline PRIVATE week3)
 
 if(READLINE_INCLUDE_DIR AND READLINE_LIBRARY)
     target_include_directories(streamline PRIVATE ${READLINE_INCLUDE_DIR})
@@ -40,10 +44,10 @@ if(READLINE_INCLUDE_DIR AND READLINE_LIBRARY)
 endif()
 
 add_executable(tests ${CORE_SOURCES} tests/correctness/tests.cpp)
-target_include_directories(tests PRIVATE week2)
+target_include_directories(tests PRIVATE week3)
 
 add_executable(benchmark ${CORE_SOURCES} tests/performance/benchmark.cpp)
-target_include_directories(benchmark PRIVATE week2)
+target_include_directories(benchmark PRIVATE week3)
 
 set(WEEK1_SOURCES
     week1/scanner.cpp
