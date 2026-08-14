@@ -89,7 +89,8 @@ followed. Other operations can be joined with `|` to form a query pipeline.
 
 Each version used for performance testing gets an ID such as `week3-v1`.
 This makes it clear which version produced each benchmark result. The
-benchmark uses the same file loading and query code as the CLI.
+benchmark uses the same file loading and query code as the CLI. It prints the
+five runs and median result in a table.
 
 ```sh
 ./build/streamline --version

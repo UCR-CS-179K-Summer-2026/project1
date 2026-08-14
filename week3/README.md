@@ -20,3 +20,6 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ./build/streamline
 ```
+
+Run `./build/benchmark` to see the five benchmark runs and median time in a
+table.

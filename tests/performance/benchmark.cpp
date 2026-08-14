@@ -61,15 +61,11 @@ bool validResult(const BenchmarkResult& result) {
 }
 
 void printResult(const string& run, const BenchmarkResult& result) {
-    cout << getVersionId() << ","
-         << DATASET << ","
-         << QUERY_NAME << ","
-         << run << ","
-         << result.records << ","
-         << fixed << setprecision(3)
-         << result.loadMs << ","
-         << result.queryMs << ","
-         << result.totalMs << "\n";
+    cout << left << setw(8) << run
+         << right << fixed << setprecision(3)
+         << setw(12) << result.loadMs
+         << setw(13) << result.queryMs
+         << setw(13) << result.totalMs << "\n";
 }
 
 int main() {
@@ -91,7 +87,15 @@ int main() {
             results.push_back(result);
         }
 
-        cout << "version,dataset,query,run,records,load_ms,query_ms,total_ms\n";
+        cout << "Streamline Benchmark\n"
+             << "Version: " << getVersionId() << "\n"
+             << "Dataset: " << DATASET << "\n"
+             << "Query: " << QUERY_NAME << "\n"
+             << "Records: " << results[0].records << "\n\n"
+             << left << setw(8) << "Run"
+             << right << setw(12) << "Load (ms)"
+             << setw(13) << "Query (ms)"
+             << setw(13) << "Total (ms)" << "\n";
         for (size_t i = 0; i < results.size(); i++) {
             printResult(to_string(i + 1), results[i]);
         }
@@ -101,7 +105,8 @@ int main() {
                                                             const BenchmarkResult& b) {
             return a.totalMs < b.totalMs;
         });
-        printResult("median", sortedResults[sortedResults.size() / 2]);
+        cout << string(46, '-') << "\n";
+        printResult("Median", sortedResults[sortedResults.size() / 2]);
     } catch (const exception& e) {
         cerr << "benchmark: " << e.what() << "\n";
         return 1;
