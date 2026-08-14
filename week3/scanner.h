@@ -14,7 +14,7 @@ using namespace std;
 // unscoped enum whose first enumerator is literally `TokenType` (from
 // TOKEN_INFORMATION_CLASS in winnt.h), which collides with that name in the
 // global namespace once windows.h is included anywhere in the same TU.
-enum class JSONTokenType : uint8_t {Boolean, Colon, Comma, End, LBrace, LBracket, Null, Number, RBrace, RBracket, String};
+enum class JSONTokenType : uint8_t {Boolean, Colon, Comma, End, LBrace, LBracket, Null, Number, ObjEnd, RBrace, RBracket, String};
 enum class ParserType {JSONL, JSON};
 
 struct Token {

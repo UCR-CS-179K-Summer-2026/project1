@@ -20,6 +20,8 @@ CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 compile_commands.json
+__cmake_systeminformation/
+CMakePresets.json
 
 # manually-compiled binaries from the g++ one-liners in file comments
 week*/demo

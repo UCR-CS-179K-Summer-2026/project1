@@ -17,19 +17,19 @@
 using namespace std;
 
 #include "file-reader.h"
-#include "integration.h"
+//#include "integration.h"
 #include "session.h"
 #include "version.h"
-
+/*
 struct CliState {
     Session session;
     string name;
     size_t recordCount = 0;
 };
-
-bool doUpload(CliState& state);
-bool doSearch(CliState& state);
-void runInteractive();
+*/
+bool doUpload(Session& session);
+bool doSearch(Session& session);
+void runInteractive(Session &session);
 void printUsage();
 void printBanner();
 void printBoxBorder(const string& left, const string& right);
@@ -46,6 +46,7 @@ int main(int argc, char** argv) {
     SetConsoleOutputCP(65001);
 #endif
 
+    Session session;
     vector<string> args;
 
     for (int i = 1; i < argc; i++) {
@@ -62,7 +63,7 @@ int main(int argc, char** argv) {
     }
 
     if (args.empty()) {
-        runInteractive();
+        runInteractive(session);
         return 0;
     }
 
@@ -71,20 +72,21 @@ int main(int argc, char** argv) {
         printUsage();
         return 1;
     }
-
-    CliState state;
+    
+    //CliState state;
     try {
-        loadSessionFile(args[0], state.session, state.name, state.recordCount);
-        cout << excecuteQuery(state.session, args[1]) << "\n";
+        //loadSessionFile(args[0], state.session, state.name, state.recordCount);
+        uploadFile(args[0], session);
+        cout << excecuteQuery(session, args[1]) << "\n";
     } catch (const exception& e) {
         cout << "streamline: " << e.what() << "\n";
         return 1;
     }
-
+    
     return 0;
 }
 
-bool doUpload(CliState& state) {
+bool doUpload(Session& session) {
     string path;
     while (true) {
         if (!promptLine("Enter path to your file: ", path)) {
@@ -99,30 +101,31 @@ bool doUpload(CliState& state) {
             return true;
         }
 
-        CliState uploaded;
+        //CliState uploaded;
         try {
-            loadSessionFile(path, uploaded.session, uploaded.name, uploaded.recordCount);
+            //loadSessionFile(path, uploaded.session, uploaded.name, uploaded.recordCount);
+            uploadFile(path, session);
         } catch (const exception& e) {
             cout << "streamline: " << e.what() << "\n";
             continue;
         }
 
-        state = std::move(uploaded);
-        cout << "File " << state.name << " uploaded successfully. ("
-             << state.recordCount
-             << (state.recordCount == 1 ? " record)\n" : " records)\n");
+        //state = std::move(uploaded);
+        cout << "File " << session.name << " uploaded successfully. ("
+             << session.records
+             << (session.records == 1 ? " record)\n" : " records)\n");
         return true;
     }
 }
 
-bool doSearch(CliState& state) {
-    if (!state.session.isInitialized) {
+bool doSearch(Session& session) {
+    if (!session.isInitialized) {
         cout << "Please upload a file first\n";
         printMenu();
         return true;
     }
 
-    cout << endl << "Querying " << state.name << ". Enter q to exit query mode." << endl;
+    cout << endl << "Querying " << session.name << ". Enter q to exit query mode." << endl;
     while (true) {
         string query;
         if (!promptLine("Enter your search query: ", query)) {
@@ -131,7 +134,7 @@ bool doSearch(CliState& state) {
 
         string command = normalizeCommand(query);
         if(command == "u" || command == "upload") {
-            doUpload(state);
+            doUpload(session);
         } else if (command == "q" || command == "quit") {
             printMenu();
             return true;
@@ -140,22 +143,22 @@ bool doSearch(CliState& state) {
         }
 
         try {
-            cout << excecuteQuery(state.session, query) << "\n";
+            cout << excecuteQuery(session, query) << "\n";
         } catch (const exception& e) {
             cout << "streamline: " << e.what() << "\n";
         }
     }
 }
 
-void runInteractive() {
+void runInteractive(Session& session) {
     printBanner();
     printMenu();
 
-    CliState state;
+    //CliState state;
     string input;
 
     while (true) {
-        string prompt = state.session.isInitialized ? "[" + state.name + "] > " : "> ";
+        string prompt = session.isInitialized ? "[" + session.name + "] > " : "> ";
         if (!promptLine(prompt, input)) {
             break;
         }
@@ -170,14 +173,14 @@ void runInteractive() {
         } else if (command == "m" || command == "menu") {
             printMenu();
         } else if (command == "u" || command == "upload") {
-            if (!doUpload(state)) {
+            if (!doUpload(session)) {
                 break;
             }
-            if (state.session.isInitialized && !doSearch(state)) {
+            if (session.isInitialized && !doSearch(session)) {
                 break;
             }
         } else if (command == "s" || command == "search") {
-            if (!doSearch(state)) {
+            if (!doSearch(session)) {
                 break;
             }
         } else {

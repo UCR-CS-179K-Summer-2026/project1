@@ -7,9 +7,10 @@
 #include <vector>
 
 #include "file-reader.h"
+#include "session.h"
 #include "version.h"
 
-const string DATASET = "json/students.json";
+const string DATASET = "../json/students.json";
 const string QUERY = R"(AVERAGE(GET("gpa")))";
 const string QUERY_NAME = "average_gpa";
 const string EXPECTED_RESULT = "3.00217";

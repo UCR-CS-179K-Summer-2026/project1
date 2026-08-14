@@ -29,7 +29,6 @@ set(CORE_SOURCES
     week3/scanner.cpp
     week3/parser.cpp
     week3/file-reader.cpp
-    week3/integration.cpp
     week3/version.cpp
     week3/query-parser.cpp
 )
