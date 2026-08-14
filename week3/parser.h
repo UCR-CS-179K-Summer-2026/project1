@@ -20,6 +20,7 @@ class Parser {
     Parser(string_view json, ParserType type ) : scanner(json, type), currToken(scanner.scan()), fileType(type) {}
 
     JSONValue parse();
+    JSONValue parseObject();
 
     //string unescapeString(const string_view& str);
 };

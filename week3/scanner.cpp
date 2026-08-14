@@ -6,9 +6,14 @@ Token Scanner::scan() {
     while(curr < end && (*curr == ' ' || *curr == '\n' || *curr == '\t' || *curr == '\r')) {
         if(*curr == '\n') {
             ++currLine;
-        }
+            ++curr;
 
-        ++curr;
+            if(fileType == ParserType::JSONL) {
+                return Token(JSONTokenType::ObjEnd, {});
+            }
+        } else {
+            ++curr;
+        }
     }
 
     if(curr >= end) {
@@ -53,19 +58,11 @@ Token Scanner::scan() {
                            *(curr + 1) == 'r' || *(curr + 1) == 't') {
                     curr += 2;  // skip escaped character
                 } else {
-                    if(fileType == ParserType::JSON) {
-                        throw runtime_error("Illegal escape sequence in string at line " + to_string(currLine));
-                    } else {
-                        throw runtime_error("Illegal escape sequence in string");
-                    }
+                    throw runtime_error("Illegal escape sequence in string at line " + to_string(currLine));
                 }
 
             } else if(static_cast<unsigned char>(*curr) < 0x20) {
-                if(fileType == ParserType::JSON) {
-                    throw runtime_error("Illegal unescaped control character in string at line " + to_string(currLine));
-                } else {
-                    throw runtime_error("Illegal unescaped control character in string");
-                }
+                throw runtime_error("Illegal unescaped control character in string at line " + to_string(currLine));
             } else {
                 curr++;
             }
@@ -115,6 +112,6 @@ Token Scanner::scan() {
     if(fileType == ParserType::JSON) {
         throw runtime_error("Invalid JSON input at line " + to_string(currLine));
     } else {
-        throw runtime_error("Invalid JSONL input");
+        throw runtime_error("Invalid JSONL input at line " + to_string(currLine));
     }
 }

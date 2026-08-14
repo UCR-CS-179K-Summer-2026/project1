@@ -3,6 +3,27 @@
 #include "parser.h"
 
 JSONValue Parser::parse() {
+    if(fileType == ParserType::JSON) {
+        if(currToken.type != JSONTokenType::End) {
+            JSONValue result = parseObject();
+            return result;
+        }
+
+        return JSONValue(nullptr);
+    }
+
+    ArrayValue records;
+    while(currToken.type != JSONTokenType::End) {
+        while(currToken.type != JSONTokenType::ObjEnd && currToken.type != JSONTokenType::End) {
+            records.push_back(parseObject());
+        }
+        currToken = scanner.scan();
+    }
+
+    return JSONValue(move(records));
+}
+
+JSONValue Parser::parseObject() {
     switch(currToken.type) {
         case JSONTokenType::LBrace: {
             vector<pair<string, JSONValue>> object;
@@ -28,7 +49,7 @@ JSONValue Parser::parse() {
                 }
                 currToken = scanner.scan();
 
-                JSONValue value = parse();
+                JSONValue value = parseObject();
                 object.emplace_back(move(key), move(value));
 
                 if(currToken.type == JSONTokenType::Comma) {
@@ -50,7 +71,7 @@ JSONValue Parser::parse() {
             currToken = scanner.scan();
 
             while(currToken.type != JSONTokenType::RBracket) {
-                array.push_back(parse());
+                array.push_back(parseObject());
 
                 if(currToken.type == JSONTokenType::Comma) {
                     currToken = scanner.scan();

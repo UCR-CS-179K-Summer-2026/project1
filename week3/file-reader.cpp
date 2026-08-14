@@ -156,7 +156,7 @@ pair<double, size_t> sumField(const ArrayValue& arr, const vector<string_view>& 
 
 }  // namespace
 
-void uploadFile(const string& path, Session& session) {
+void uploadFile(const string& path, Session& session) {    
     ifstream file(path);
     if (!file.is_open()) {
         throw runtime_error(
@@ -168,6 +168,7 @@ void uploadFile(const string& path, Session& session) {
 
     filesystem::path filepath(path);
     string extension = filepath.extension().string();
+    string name = filepath.filename().string();
 
     transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) {
         return tolower(c);
@@ -180,21 +181,17 @@ void uploadFile(const string& path, Session& session) {
     JSONValue temp = JSONValue(nullptr);
 
     if(extension == ".jsonl") {
-        //session.updateFile(contents, ParserType::JSONL);
         Parser p(contents, ParserType::JSONL);
         temp = p.parse();
     } else {
-        //session.updateFile(contents, ParserType::JSON);
         Parser p(contents, ParserType::JSON);
         temp = p.parse();
     }
 
-    session.initialize(temp);
+    session.initialize(temp, name);
 }
 
-string excecuteQuery(Session& session, string query) {
-    cout << "Excecuting query..." << endl;
-
+string excecuteQuery(Session& session, const string& query) {
     QueryParser q(query);
     q.parse();
 
