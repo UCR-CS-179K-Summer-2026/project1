@@ -17,16 +17,9 @@
 using namespace std;
 
 #include "file-reader.h"
-//#include "integration.h"
 #include "session.h"
 #include "version.h"
-/*
-struct CliState {
-    Session session;
-    string name;
-    size_t recordCount = 0;
-};
-*/
+
 bool doUpload(Session& session);
 bool doSearch(Session& session);
 void runInteractive(Session &session);
@@ -73,9 +66,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     
-    //CliState state;
     try {
-        //loadSessionFile(args[0], state.session, state.name, state.recordCount);
         uploadFile(args[0], session);
         cout << excecuteQuery(session, args[1]) << "\n";
     } catch (const exception& e) {
@@ -101,16 +92,13 @@ bool doUpload(Session& session) {
             return true;
         }
 
-        //CliState uploaded;
         try {
-            //loadSessionFile(path, uploaded.session, uploaded.name, uploaded.recordCount);
             uploadFile(path, session);
         } catch (const exception& e) {
             cout << "streamline: " << e.what() << "\n";
             continue;
         }
 
-        //state = std::move(uploaded);
         cout << "File " << session.name << " uploaded successfully. ("
              << session.records
              << (session.records == 1 ? " record)\n" : " records)\n");
@@ -154,7 +142,6 @@ void runInteractive(Session& session) {
     printBanner();
     printMenu();
 
-    //CliState state;
     string input;
 
     while (true) {

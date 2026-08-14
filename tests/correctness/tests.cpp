@@ -8,7 +8,6 @@
 #include <iostream>
 
 #include "file-reader.h"
-//#include "integration.h"
 #include "scanner.h"
 #include "session.h"
 #include "version.h"
