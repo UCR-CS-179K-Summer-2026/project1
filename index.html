@@ -270,6 +270,26 @@
         font-size: 0.92rem;
       }
 
+      .diagram {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--box-bg);
+        padding: 0.75rem;
+        margin: 1.2rem 0;
+      }
+      .diagram img {
+        display: block;
+        width: 100%;
+        height: auto;
+        border-radius: 6px;
+      }
+      .diagram figcaption {
+        margin-top: 0.6rem;
+        text-align: center;
+        font-size: 0.85rem;
+        color: var(--fg-muted);
+      }
+
       .roles {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -457,6 +477,11 @@
           against the shape it actually got (array vs. object) and fails with a readable error
           rather than misreading the wrong type.
         </p>
+
+        <figure class="diagram">
+          <img src="assets/architecture-diagram.png" alt="Streamline architecture diagram: file loading pipeline (Scanner → Parser → Session) and query execution pipeline (QueryScanner/QueryParser → Expression tree → excecuteQuery)">
+          <figcaption>End-to-end architecture — file loading and query execution pipelines.</figcaption>
+        </figure>
       </section>
 
       <section id="roles">
