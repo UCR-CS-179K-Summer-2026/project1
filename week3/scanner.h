@@ -4,7 +4,7 @@
 
 #include <cstdint>
 #include <iostream>
-#include <regex>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 

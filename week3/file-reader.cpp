@@ -156,8 +156,8 @@ pair<double, size_t> sumField(const ArrayValue& arr, const vector<string_view>& 
 
 }  // namespace
 
-void uploadFile(const string& path, Session& session) {    
-    ifstream file(path);
+void uploadFile(const string& path, Session& session) {
+    ifstream file(path, ios::binary);
     if (!file.is_open()) {
         throw runtime_error(
             "Could not open '" + path + "'. Check that the path is spelled "
@@ -174,9 +174,14 @@ void uploadFile(const string& path, Session& session) {
         return tolower(c);
     });
 
-    ostringstream buffer;
-    buffer << file.rdbuf();
-    string contents = buffer.str();
+    file.seekg(0, ios::end);
+    streamsize size = file.tellg();
+    file.seekg(0, ios::beg);
+
+    string contents(static_cast<size_t>(size), '\0');
+    if (size > 0 && !file.read(contents.data(), size)) {
+        throw runtime_error("Could not read '" + path + "'.");
+    }
 
     JSONValue temp = JSONValue(nullptr);
 

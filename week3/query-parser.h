@@ -3,7 +3,7 @@
 #include "value.h"
 
 #include <cstdint>
-#include <regex>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <variant>
