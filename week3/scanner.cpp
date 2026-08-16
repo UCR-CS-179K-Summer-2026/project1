@@ -100,11 +100,46 @@ Token Scanner::scan() {
             curr++;
         }
 
-        static const regex pattern(R"(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)");
-        string str(numberBegin, curr - numberBegin);
+        // Hand-rolled equivalent of -?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?,
+        // matched in full (same as regex_match). Avoids allocating a string and
+        // running a backtracking regex engine per number, which dominated parse
+        // time on number-heavy input.
+        const char* numberEnd = curr;
+        const char* p = numberBegin;
+        bool valid = true;
 
-        if(regex_match(str, pattern)) {
-            string_view num(numberBegin, curr - numberBegin);
+        if(p < numberEnd && *p == '-') p++;
+
+        if(p < numberEnd && *p == '0') {
+            p++;
+        } else if(p < numberEnd && *p >= '1' && *p <= '9') {
+            p++;
+            while(p < numberEnd && *p >= '0' && *p <= '9') p++;
+        } else {
+            valid = false;
+        }
+
+        if(valid && p < numberEnd && *p == '.') {
+            p++;
+            if(p >= numberEnd || *p < '0' || *p > '9') {
+                valid = false;
+            } else {
+                while(p < numberEnd && *p >= '0' && *p <= '9') p++;
+            }
+        }
+
+        if(valid && p < numberEnd && (*p == 'e' || *p == 'E')) {
+            p++;
+            if(p < numberEnd && (*p == '+' || *p == '-')) p++;
+            if(p >= numberEnd || *p < '0' || *p > '9') {
+                valid = false;
+            } else {
+                while(p < numberEnd && *p >= '0' && *p <= '9') p++;
+            }
+        }
+
+        if(valid && p == numberEnd) {
+            string_view num(numberBegin, numberEnd - numberBegin);
             return Token(JSONTokenType::Number, num);
         }
     }
