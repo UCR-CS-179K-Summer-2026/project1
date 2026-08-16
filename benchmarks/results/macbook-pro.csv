@@ -1,0 +1,7 @@
+schema_version,timestamp_utc,version,machine,os,architecture,compiler,build_type,dataset,dataset_bytes,query,records,sample,load_ms,query_ms,total_ms
+1,2026-08-16T07:06:45.867Z,week3-v1,macbook-pro,Darwin,arm64,AppleClang-17.0.0.17000013,Release,json/students.json,50000000,average_gpa,85032,1,287.288,61.305,348.593
+1,2026-08-16T07:06:45.867Z,week3-v1,macbook-pro,Darwin,arm64,AppleClang-17.0.0.17000013,Release,json/students.json,50000000,average_gpa,85032,2,286.726,65.422,352.148
+1,2026-08-16T07:06:45.867Z,week3-v1,macbook-pro,Darwin,arm64,AppleClang-17.0.0.17000013,Release,json/students.json,50000000,average_gpa,85032,3,286.284,64.454,350.738
+1,2026-08-16T07:06:45.867Z,week3-v1,macbook-pro,Darwin,arm64,AppleClang-17.0.0.17000013,Release,json/students.json,50000000,average_gpa,85032,4,288.598,68.643,357.242
+1,2026-08-16T07:06:45.867Z,week3-v1,macbook-pro,Darwin,arm64,AppleClang-17.0.0.17000013,Release,json/students.json,50000000,average_gpa,85032,5,283.795,66.668,350.464
+1,2026-08-16T07:06:45.867Z,week3-v1,macbook-pro,Darwin,arm64,AppleClang-17.0.0.17000013,Release,json/students.json,50000000,average_gpa,85032,median,286.284,64.454,350.738
