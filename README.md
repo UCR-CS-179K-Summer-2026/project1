@@ -90,12 +90,28 @@ followed. Other operations can be joined with `|` to form a query pipeline.
 Each version used for performance testing gets an ID such as `week3-v1`.
 This makes it clear which version produced each benchmark result. The
 benchmark uses the same file loading and query code as the CLI. It prints the
-five runs and median result in a table.
+five runs and median result in a table, then appends the runs and median to a
+CSV file under `benchmarks/results`. Each computer gets its own CSV file so
+results from different machines can be committed without constantly editing
+the same file.
 
 ```sh
 ./build/streamline --version
 ./build/benchmark
+./build/benchmark --machine lab-mac
 ```
+
+Use the same `--machine` label for repeated runs on one computer. Without the
+option, the computer hostname is used. Each row includes the timestamp,
+Streamline version, machine, operating system, architecture, compiler, build
+type, dataset information, sample number, and load/query/total times. Use
+`--output path/to/results.csv` when a specific output file is needed.
+
+The CSV files are intentionally not ignored. After collecting results on each
+computer, add the files under `benchmarks/results` to version control. A future
+HTML visualization can load every CSV in that directory and select the rows
+whose `sample` value is `median` for a simple comparison, or use the numbered
+samples for variability and error bars.
 
 More information about the version IDs and benchmark process is on the
 [design page](https://ucr-cs-179k-summer-2026.github.io/project1/#versioning).

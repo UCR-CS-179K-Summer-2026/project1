@@ -47,3 +47,10 @@ target_include_directories(tests PRIVATE week3)
 
 add_executable(benchmark ${CORE_SOURCES} tests/performance/benchmark.cpp)
 target_include_directories(benchmark PRIVATE week3)
+target_compile_definitions(benchmark PRIVATE
+    STREAMLINE_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
+    STREAMLINE_SYSTEM_NAME="${CMAKE_SYSTEM_NAME}"
+    STREAMLINE_SYSTEM_PROCESSOR="${CMAKE_SYSTEM_PROCESSOR}"
+    STREAMLINE_COMPILER="${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}"
+    STREAMLINE_BUILD_TYPE="$<CONFIG>"
+)
