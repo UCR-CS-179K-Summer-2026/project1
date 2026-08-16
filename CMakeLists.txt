@@ -47,12 +47,3 @@ target_include_directories(tests PRIVATE week3)
 
 add_executable(benchmark ${CORE_SOURCES} tests/performance/benchmark.cpp)
 target_include_directories(benchmark PRIVATE week3)
-
-set(WEEK1_SOURCES
-    week1/scanner.cpp
-    week1/parser.cpp
-    week1/file-reader.cpp
-)
-
-add_executable(w1tests ${WEEK1_SOURCES} week1/main.cpp)
-target_include_directories(w1tests PRIVATE week1)
