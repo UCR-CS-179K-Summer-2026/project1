@@ -214,7 +214,8 @@ string excecuteQuery(Session& session, const string& query) {
             if (!result.ok) {
                 return formatResult(result);
             }
-            current = *result.value;
+            JSONValue next = *result.value;
+            current = move(next);
 
         } else if (holds_alternative<Filter>(function)) {
             const Filter& filterFunc = get<Filter>(function);

@@ -1,10 +1,3 @@
-// Unit tests for the parser, the file reader, and lookup().
-//
-// Build:
-//   g++ -std=c++17 -Wall -Wextra -Iweek1 week1/scanner.cpp week1/parser.cpp
-//     week1/file-reader.cpp tests/tests.cpp -o tests
-// Run:
-//   ./tests tests/data
 #include <iostream>
 
 #include "file-reader.h"
@@ -15,18 +8,27 @@
 int passed = 0;
 int failed = 0;
 
-string dataDir = "../tests/data";
+string dataDir = "tests/data";
 
 void section(const string& name) {
     cout << "\n" << name << "\n";
 }
 
+void pass(const string& label) {
+    passed++;
+    cout << "  ✓ PASS  " << label << "\n";
+}
+
+void fail(const string& label) {
+    failed++;
+    cout << "  ✗ FAIL  " << label << "\n";
+}
+
 void check(bool ok, const string& label) {
     if (ok) {
-        passed++;
+        pass(label);
     } else {
-        failed++;
-        cout << "  FAIL " << label << "\n";
+        fail(label);
     }
 }
 
@@ -94,10 +96,10 @@ bool sameOutput(const string& got, const string& want) {
 void checkParse(const string& text, const string& want) {
     string got = parseAndFormat(text);
     if (sameOutput(got, want)) {
-        passed++;
+        pass("parse " + text);
     } else {
-        failed++;
-        cout << "  FAIL " << text << "\n         got  " << got << "\n         want " << want << "\n";
+        fail("parse " + text);
+        cout << "         got  " << got << "\n         want " << want << "\n";
     }
 }
 
@@ -126,10 +128,10 @@ void checkLookup(const string& text, const string& path, const string& want) {
     string got = excecuteQuery(session, path);
 
     if (sameOutput(got, want)) {
-        passed++;
+        pass(path);
     } else {
-        failed++;
-        cout << "  FAIL " << path << " on " << text << "\n         got  " << got
+        fail(path + " on " + text);
+        cout << "         got  " << got
              << "\n         want " << want << "\n";
     }
 }
@@ -141,15 +143,15 @@ void checkQuery(const string& text, const string& query, const string& want) {
         session.initialize(parser.parse(), "test");
         string got = excecuteQuery(session, query);
         if (sameOutput(got, want)) {
-            passed++;
+            pass(query);
         } else {
-            failed++;
-            cout << "  FAIL " << query << "\n         got  " << got
+            fail(query);
+            cout << "         got  " << got
                  << "\n         want " << want << "\n";
         }
     } catch (const exception& e) {
-        failed++;
-        cout << "  FAIL " << query << "\n         " << e.what() << "\n";
+        fail(query);
+        cout << "         " << e.what() << "\n";
     }
 }
 
@@ -169,10 +171,10 @@ int recordCount(const string& file) {
 void checkCount(const string& file, int want) {
     int got = recordCount(file);
     if (got == want) {
-        passed++;
+        pass(file + " record count");
     } else {
-        failed++;
-        cout << "  FAIL " << file << " has " << got << " records, wanted " << want << "\n";
+        fail(file + " record count");
+        cout << "         got  " << got << "\n         want " << want << "\n";
     }
 }
 
@@ -184,10 +186,10 @@ void checkField(const string& file, size_t index, const string& path, const stri
     string got = index < s.records ? excecuteQuery(s, path) : "<no record>";
 
     if (got == want) {
-        passed++;
+        pass(file + "[" + to_string(index) + "] " + path);
     } else {
-        failed++;
-        cout << "  FAIL " << file << "[" << index << "] " << path << "\n         got  " << got
+        fail(file + "[" + to_string(index) + "] " + path);
+        cout << "         got  " << got
              << "\n         want " << want << "\n";
     }
 }
@@ -423,9 +425,11 @@ int main(int argc, char** argv) {
     testQueries();
     testVersion();
 
-    cout << "\n--------------------\n";
-    cout << "passed: " << passed << "\n";
-    cout << "failed: " << failed << "\n";
+    const int total = passed + failed;
+    cout << "\n══════════ TEST RESULTS ══════════\n";
+    cout << (failed == 0 ? "✓ PASS" : "✗ FAIL") << "\n";
+    cout << passed << " passed · " << failed << " failed · " << total << " total\n";
+    cout << "════════════════════════════════════\n";
 
     return failed == 0 ? 0 : 1;
 }
