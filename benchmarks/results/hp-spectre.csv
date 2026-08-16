@@ -1,0 +1,7 @@
+schema_version,timestamp_utc,version,machine,os,architecture,compiler,build_type,dataset,dataset_bytes,query,records,sample,load_ms,query_ms,total_ms
+1,2026-08-16T21:10:33.470Z,week3-v1,hp-spectre,Windows,AMD64,GNU-16.1.0,Release,json/students.json,50000000,average_gpa,85032,1,809.336,187.180,996.516
+1,2026-08-16T21:10:33.470Z,week3-v1,hp-spectre,Windows,AMD64,GNU-16.1.0,Release,json/students.json,50000000,average_gpa,85032,2,793.914,188.011,981.924
+1,2026-08-16T21:10:33.470Z,week3-v1,hp-spectre,Windows,AMD64,GNU-16.1.0,Release,json/students.json,50000000,average_gpa,85032,3,781.146,188.631,969.777
+1,2026-08-16T21:10:33.470Z,week3-v1,hp-spectre,Windows,AMD64,GNU-16.1.0,Release,json/students.json,50000000,average_gpa,85032,4,810.539,175.616,986.155
+1,2026-08-16T21:10:33.470Z,week3-v1,hp-spectre,Windows,AMD64,GNU-16.1.0,Release,json/students.json,50000000,average_gpa,85032,5,802.936,180.399,983.334
+1,2026-08-16T21:10:33.470Z,week3-v1,hp-spectre,Windows,AMD64,GNU-16.1.0,Release,json/students.json,50000000,average_gpa,85032,median,802.936,180.399,983.334
