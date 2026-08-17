@@ -357,6 +357,7 @@
       <a href="#edge-cases">Edge Cases</a>
       <a href="#query-language">Query Language</a>
       <a href="#algorithms">Algorithms &amp; Optimizations</a>
+      <a href="#references">References</a>
       <a href="#build-system">Build System</a>
       <a href="#versioning">Versioning &amp; Benchmarking</a>
       <a href="#timeline">Timeline</a>
@@ -470,24 +471,28 @@
               <li><code>Scanner</code> / <code>Parser</code> for JSON, and the strict escape/control-character validation on top</li>
               <li>Fixed <code>\uXXXX</code> decoding to correctly combine surrogate pairs and UTF-8-encode the result — emoji now decode and compare correctly</li>
               <li>Designed and built <code>QueryScanner</code> / <code>QueryParser</code> — the tokenizer and recursive-descent grammar for the query language itself, including <code>AND</code> / <code>OR</code></li>
+              <li>Fixed <code>.jsonl</code> parsing/scanning correctness (the <code>jsonl-parser-fix</code> branch)</li>
+              <li>Replaced the scanner's per-number <code>regex_match</code> validation with a hand-rolled digit-by-digit grammar check — see <a href="#algorithms">Algorithms</a></li>
             </ul>
           </div>
           <div class="card">
             <div class="owner">Javier</div>
-            <h4>Query execution engine</h4>
+            <h4>Query execution engine &amp; performance</h4>
             <ul>
               <li>Implemented <code>FILTER</code>, <code>SORT</code>, <code>LIMIT</code>, <code>GROUPBY</code>, and <code>AVERAGE</code> against Jules's expression tree in <code>excecuteQuery()</code></li>
               <li>Sort-key precomputation and hash-map grouping (see <a href="#algorithms">Algorithms</a>) instead of the naive O(n log n) / O(n·groups) approach</li>
               <li>Found and fixed several crash bugs (type-mismatch comparisons, non-numeric <code>AVERAGE</code>, invalid <code>GROUPBY</code> keys) so bad input fails cleanly instead of taking the program down</li>
+              <li>Fast-path key comparison in <code>get()</code> — cut <code>AVERAGE</code>'s measured query time from 40.7ms to 30.2ms on the 85k-record benchmark by skipping unnecessary <code>unescapeString</code> allocations (see <a href="#algorithms">Algorithms</a>)</li>
+              <li>Parallelized <code>sumField</code>'s reduction across threads (map/partition/merge) — a further 40.7ms &rarr; 28.0ms combined, with a portable <code>std::thread</code> implementation instead of <code>std::execution::par</code> (unsupported by default on this project's Clang/libc++ toolchain)</li>
             </ul>
           </div>
           <div class="card">
             <div class="owner">Ryan</div>
-            <h4>CLI, integration, testing &amp; benchmarking</h4>
+            <h4>CLI &amp; benchmarking cleanup</h4>
             <ul>
-              <li><code>Session</code>-based CLI (<code>main.cpp</code>) — menu-driven upload-once, query-many-times flow</li>
-              <li><code>integration.cpp</code> — the legacy <code>readFile()</code>/string-path <code>get()</code> surface the test suite runs against</li>
-              <li>Version tracking (<code>--version</code>), the regression test suite, and the performance benchmark harness</li>
+              <li><code>Session</code>-based CLI (<code>main.cpp</code>) — menu-driven upload-once, query-many-times flow, plus later CLI polish passes</li>
+              <li>Colorized <code>PASS</code>/<code>FAIL</code> output for the regression suite (<code>tests/correctness/tests.cpp</code>)</li>
+              <li>CSV export for the benchmark harness (<code>benchmarks/results/&lt;machine&gt;.csv</code>), plus formatting cleanup on the benchmark table itself</li>
             </ul>
           </div>
         </div>
@@ -687,15 +692,17 @@ public:
 };</code></pre>
 
         <h3>Session &amp; execution engine (Ryan &amp; Javier)</h3>
-        <p class="muted"><code>Session</code> holds the uploaded document; <code>excecuteQuery()</code> runs a query string against it and returns the formatted result (or a formatted error) as one <code>string</code> — no exceptions escape past it for a malformed query, they're caught by the caller in <code>main.cpp</code>.</p>
+        <p class="muted"><code>Session</code> holds the uploaded document; <code>excecuteQuery()</code> runs a query string against it and returns the formatted result (or a formatted error) as one <code>string</code> — no exceptions escape past it for a malformed query, they're caught by the caller in <code>main.cpp</code>. <code>Session</code> now also tracks the uploaded file's display name and record count directly, so the CLI doesn't need a separate wrapper struct to show "file uploaded (N records)".</p>
         <pre><code>struct Session {
     JSONValue file = JSONValue(nullptr);
     bool isInitialized = false;
-    void initialize(JSONValue v);
+    string name = "";
+    int records = 0;
+    void initialize(JSONValue v, string n);
 };
 
 void uploadFile(const string&amp; path, Session&amp; session);
-string excecuteQuery(Session&amp; session, string query);
+string excecuteQuery(Session&amp; session, const string&amp; query);
 
 struct LookupResult {
     bool ok;
@@ -925,25 +932,144 @@ $ ./streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'</code
           regardless of how many distinct groups exist.
         </p>
 
+        <h3>Hand-rolled number validation <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Jules</span></h3>
+        <p class="muted">
+          <code>Scanner::scan()</code> used to validate every number token with
+          <code>std::regex_match</code> against a fixed pattern — correct, but a backtracking
+          regex engine plus a throwaway <code>std::string</code> allocation on <em>every single
+          number</em> in the file, which dominates on number-heavy datasets. It's now a direct
+          character-by-character walk of the same grammar
+          (<code>-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?</code>) over the existing
+          <code>string_view</code> — same accepted language, zero allocation, no backtracking.
+        </p>
+
+        <h3>Fast-path key comparison <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Javier</span></h3>
+        <p class="muted">
+          Object keys are stored in raw/escaped form, so <code>get()</code>'s field lookup used
+          to compare candidate keys with <code>unescapeString(a) == unescapeString(b)</code> —
+          two fresh heap allocations per key checked, on every linear scan through an object,
+          for every <code>FILTER</code> / <code>SORT</code> / <code>GROUPBY</code> /
+          <code>AVERAGE</code> record. <code>unescapeString</code> is a pure function, which
+          licenses two shortcuts that return the identical answer without paying for either
+          allocation in the common case:
+        </p>
+        <ol class="muted" style="font-size:0.92rem;">
+          <li><strong>Raw equality first.</strong> Equal inputs to a pure function always
+            produce equal outputs, so an exact <code>string_view ==</code> match (no
+            allocation) is enough to return <code>true</code> immediately.</li>
+          <li><strong>Identity-transform check.</strong> <code>unescapeString</code> only does
+            anything when a string contains a <code>\</code>. With no backslash on either
+            side, the raw mismatch already observed <em>is</em> the real mismatch — still no
+            allocation.</li>
+          <li>Only when the raw bytes differ <em>and</em> a backslash is present on at least
+            one side — i.e. two differently-escaped spellings might decode to the same key —
+            does it fall back to unescaping both sides.</li>
+        </ol>
+        <p class="muted">
+          This is a classic <strong>fast-path / slow-path</strong> optimization: worst-case
+          complexity is unchanged, but the expected cost on real data (mostly exact or clearly
+          different keys) drops from two allocating O(n) transforms to one allocation-free
+          comparison. See <code>keysEqual()</code> in <code>file-reader.cpp</code>.
+        </p>
+
+        <h3>Parallel reduction for <code>AVERAGE</code> <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Javier</span></h3>
+        <p class="muted">
+          Computing an exact average is inherently <code>O(n)</code> <em>work</em> — no
+          algorithm can produce a correct sum without examining every value (an adversary
+          could otherwise change an unexamined value and silently change the true answer).
+          What <em>can</em> shrink is <code>depth</code> — the length of the longest chain of
+          <em>dependent</em> operations, per the work-depth (PRAM) model. A sequential
+          <code>acc += x[i]</code> loop has <code>O(n)</code> depth, since each add depends on
+          the last. <code>sumField</code> is now a <strong>map/partition/merge</strong>
+          reduction instead:
+        </p>
+        <ul class="muted" style="font-size:0.92rem;">
+          <li><strong>Partition</strong> the array into <code>hardware_concurrency()</code>
+            contiguous slices.</li>
+          <li><strong>Map:</strong> each slice is reduced independently, in its own
+            <code>std::thread</code>, with no shared mutable state and therefore no locking.</li>
+          <li><strong>Merge:</strong> the small set of per-thread partial sums is combined
+            sequentially on the main thread — negligible next to the map phase at realistic
+            core counts.</li>
+        </ul>
+        <p class="muted">
+          By <strong>Brent's theorem</strong> this gives <code>T&#8339; = O(n/p + p)</code>
+          instead of <code>O(n)</code>. Below a fixed record-count threshold it falls back to
+          the plain sequential loop, since thread spin-up/teardown costs more than a small
+          reduction saves — that overhead is exactly the <code>+p</code> term made concrete.
+          One correctness detail worth calling out: the original code <code>throw</code>s on a
+          non-numeric field, but an exception can't safely cross a joined thread boundary — each
+          worker now reports a <code>hasTypeError</code> flag instead, and only the caller,
+          back on the main thread after every worker has joined, decides whether to throw.
+        </p>
+        <p class="muted">
+          We initially looked at <code>std::transform_reduce(std::execution::par, ...)</code> —
+          the standard-library version of the same idea — but this project's default Clang/libc++
+          toolchain doesn't ship <code>&lt;execution&gt;</code> support without a
+          non-standard <code>-fexperimental-library</code> flag, which isn't something to
+          depend on across teammates' machines (Linux/GCC, older Xcode). The manual
+          <code>std::thread</code> version needs no special flags and makes the
+          partition/map/merge structure explicit in the code rather than hidden inside a
+          library call.
+        </p>
+
         <div class="callout">
           <strong>Measured, not assumed:</strong> parsing <code>json/students.json</code>
-          (85,032 records) takes ~550&ndash;580&nbsp;ms either way — the JSON parser itself
-          didn't get faster this sprint, and there wasn't a real lever to pull there (it's
-          already a single-pass <code>O(n)</code> recursive-descent parse). Where the
-          optimizations above actually matter: a <code>FILTER</code> that matches nearly every
-          record and prints the full result added ~520&nbsp;ms on top of parsing — almost
-          entirely copying and formatting the result set — versus ~40&nbsp;ms for a
-          <code>FILTER</code> that matches nothing at all. The per-record evaluation logic is
-          already cheap; large result sets are where the cost actually lives.
+          (85,032 records) takes ~185&ndash;215&nbsp;ms either way — the JSON parser itself
+          isn't what these two optimizations target, and its own timing is unchanged. What did
+          change is <code>AVERAGE(GET("gpa"))</code>'s query time, isolated from parsing, on the
+          same machine and dataset:
         </div>
+
+        <table>
+          <thead>
+            <tr><th>Version</th><th>Query time (median of 5)</th><th>Change</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Baseline</td><td>40.724&nbsp;ms</td><td>—</td></tr>
+            <tr><td>+ fast-path <code>get()</code></td><td>30.155&nbsp;ms</td><td>&minus;25.9%</td></tr>
+            <tr><td>+ parallel reduction</td><td>28.035&nbsp;ms</td><td>&minus;31.2% total</td></tr>
+          </tbody>
+        </table>
+        <p class="muted">
+          The gap between the two steps is itself a useful data point: <code>get()</code>'s
+          allocation fix bought a bigger, single-threaded win than parallelizing the (now much
+          cheaper) reduction did — and the parallel step's own gain is smaller than a naive
+          "divide by core count" estimate would predict. That's <strong>Amdahl's Law</strong>
+          in practice — part of the remaining time is <code>JSONValue</code> tree traversal
+          (pointer-chasing through nested <code>vector</code>s), which is memory-bandwidth-bound
+          rather than compute-bound, so it doesn't scale with additional threads the way pure
+          arithmetic would.
+        </p>
 
         <div class="callout">
           <strong>Not yet optimized:</strong> <code>FILTER</code> / <code>GROUPBY</code> still
           deep-copy every matching <code>JSONValue</code> into the result set, rather than
-          carrying indices/pointers until the very end. <code>lookup()</code> / <code>get()</code>
-          still does a linear scan over an object's entries for every field access — fine at
-          typical object sizes, a candidate to revisit if that stops being true.
+          carrying indices/pointers until the very end. <code>excecuteQuery()</code> also
+          deep-copies the <em>entire</em> uploaded document into <code>current</code> at the
+          start of every query (<code>JSONValue current = session.file;</code>), even for a
+          query that only needs one field — a candidate to revisit if large-document queries
+          show up slow. <code>get()</code>'s object lookup is still a linear scan (now
+          allocation-free in the common case, but still <code>O(object width)</code>, not
+          <code>O(1)</code>) — fine at typical object sizes.
         </div>
+      </section>
+
+      <section id="references">
+        <h2>References &amp; Further Reading</h2>
+        <p class="muted">
+          Background reading behind the techniques in <a href="#algorithms">Algorithms &amp;
+          Optimizations</a> above — the work-depth/PRAM model, Brent's theorem, and parallel
+          reduction in particular. Fill in with whatever's actually being cited in the
+          presentation.
+        </p>
+        <ul class="muted">
+          <li><!-- e.g. R. P. Brent, "The parallel evaluation of general arithmetic expressions," JACM, 1974 --></li>
+          <li><!-- e.g. work-depth / PRAM model reference --></li>
+          <li><!-- e.g. cppreference: std::execution, std::transform_reduce --></li>
+          <li><!-- e.g. Amdahl's Law reference --></li>
+          <li><!-- add more as you go --></li>
+        </ul>
       </section>
 
       <section id="build-system">
@@ -996,13 +1122,13 @@ $ ./streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'</code
 
         <h3>Layout &amp; usage</h3>
         <p class="muted">
-          <code>CMakeLists.txt</code> lives at the repo root and now builds four targets from
-          <code>week2/</code> — <code>streamline</code> is the CLI, <code>tests</code> is the
-          regression suite, <code>benchmark</code> is the performance harness referenced in
-          <a href="#algorithms">Algorithms &amp; Optimizations</a>, and <code>w1tests</code>
-          keeps Sprint 1's original code building on its own, untouched, from
-          <code>week1/</code> — kept around deliberately as a record of where the project
-          started, not folded into the current codebase.
+          <code>CMakeLists.txt</code> lives at the repo root and builds three targets from
+          <code>week3/</code> — <code>streamline</code> is the CLI, <code>tests</code> is the
+          regression suite, and <code>benchmark</code> is the performance harness referenced in
+          <a href="#algorithms">Algorithms &amp; Optimizations</a>. All three link
+          <code>Threads::Threads</code> (via <code>find_package(Threads)</code>) now that
+          <code>AVERAGE</code>'s reduction spins up <code>std::thread</code>s — needed for
+          portable <code>-pthread</code> linking on Linux/GCC, not just macOS.
         </p>
         <pre><code>cmake -B build           # configure once
 cmake --build build       # (re)build — only recompiles what changed
@@ -1010,11 +1136,11 @@ cmake --build build       # (re)build — only recompiles what changed
 ./build/tests              # regression suite
 ./build/benchmark           # performance harness</code></pre>
         <p class="muted">
-          Both <code>streamline</code> and <code>tests</code> compile the same
-          <code>CORE_SOURCES</code> — <code>scanner.cpp</code>, <code>parser.cpp</code>,
-          <code>file-reader.cpp</code>, <code>integration.cpp</code>, <code>version.cpp</code>,
-          <code>query-parser.cpp</code> — so the test suite is exercising the exact same
-          engine the CLI runs, not a separate copy.
+          <code>streamline</code>, <code>tests</code>, and <code>benchmark</code> all compile
+          the same <code>CORE_SOURCES</code> — <code>scanner.cpp</code>, <code>parser.cpp</code>,
+          <code>file-reader.cpp</code>, <code>version.cpp</code>, <code>query-parser.cpp</code>
+          — so the test suite and the benchmark are both exercising the exact same engine the
+          CLI runs, not a separate copy.
         </p>
 
         <div class="callout">
@@ -1077,9 +1203,12 @@ cmake --build build
 ./build/benchmark             # then performance</code></pre>
         <p class="muted">
           One warm-up run followed by five measured runs; the last row is the median total
-          time. Output is CSV — version, dataset, query, record count, and timings in
-          milliseconds — so results across versions can be diffed or charted directly. Only
-          compare runs made on the same machine, build type, and dataset.
+          time. Every run also appends to <code>benchmarks/results/&lt;machine&gt;.csv</code>
+          (version, timestamp, machine/OS/compiler, dataset, query, record count, and load /
+          query / total timings), so results across versions <em>and</em> across teammates'
+          machines can be diffed or charted directly. Only directly compare runs made on the
+          same machine, build type, and dataset — cross-machine numbers in the same CSV are
+          useful for shape/trend, not head-to-head comparison.
         </p>
 
         <div class="callout">
@@ -1088,9 +1217,9 @@ cmake --build build
           engine optimizations are in place — the JSON parser itself wasn't the bottleneck.
           The real gap showed up in query execution: a <code>FILTER</code> matching nearly
           every record and printing the full result added ~520&nbsp;ms on top of parsing,
-          versus ~40&nbsp;ms for one matching nothing — see
-          <a href="#algorithms">Algorithms &amp; Optimizations</a> for what that pointed us
-          at fixing.
+          versus ~40&nbsp;ms for one matching nothing. <code>AVERAGE</code> told the same story
+          from a different angle — see <a href="#algorithms">Algorithms &amp; Optimizations</a>
+          for the two optimizations that came out of chasing it and the before/after numbers.
         </div>
       </section>
 
@@ -1162,12 +1291,35 @@ cmake --build build
             <h4>Emoji/unicode fix, malformed-query safety <span class="status done">done</span></h4>
             <p><code>\uXXXX</code> decoding now correctly combines surrogate pairs and UTF-8-encodes the result. A malformed query string no longer crashes the program — the parse exception is caught and reported instead.</p>
           </div>
+
+          <div class="sprint-label">Sprint 3 (Week 3) — Aug 11&ndash;17</div>
+
+          <div class="entry">
+            <div class="date">Aug 11&ndash;12</div>
+            <h4>Week 3 CLI implementation &amp; benchmark formatting</h4>
+            <p>Ryan built out the Week 3 CLI and cleaned up the benchmark table's formatting and output.</p>
+          </div>
+          <div class="entry">
+            <div class="date">Aug 14</div>
+            <h4><code>.jsonl</code> fix &amp; regex removed from the scanner <span class="status done">done</span></h4>
+            <p>Jules fixed <code>.jsonl</code> scanning/parsing correctness (merged from <code>jsonl-parser-fix</code>) and replaced the scanner's per-number <code>std::regex_match</code> validation with a hand-rolled grammar walk — see <a href="#algorithms">Algorithms &amp; Optimizations</a>.</p>
+          </div>
+          <div class="entry">
+            <div class="date">Aug 16</div>
+            <h4>Colorized tests &amp; CSV benchmark export <span class="status done">done</span></h4>
+            <p>Ryan added colorized <code>PASS</code>/<code>FAIL</code> output to the regression suite and CSV export (<code>benchmarks/results/&lt;machine&gt;.csv</code>) to the benchmark harness, so runs across teammates' machines can be collected and compared.</p>
+          </div>
+          <div class="entry">
+            <div class="date">Aug 17</div>
+            <h4><code>AVERAGE</code> optimized: fast-path lookup + parallel reduction <span class="status done">done</span></h4>
+            <p>Javier profiled <code>AVERAGE(GET("gpa"))</code> against the 85k-record benchmark, fixed the allocation-heavy key comparison in <code>get()</code>, and parallelized <code>sumField</code>'s reduction across threads — 40.7ms &rarr; 28.0ms measured query time. Full writeup, theory, and before/after numbers in <a href="#algorithms">Algorithms &amp; Optimizations</a>.</p>
+          </div>
         </div>
       </section>
     </main>
 
     <footer>
-      Sprint 2 in progress &middot; <a href="#timeline">Timeline</a> &middot; <a href="https://github.com/UCR-CS-179K-Summer-2026/project1">UCR-CS-179K-Summer-2026/project1</a>
+      Sprint 3 in progress &middot; <a href="#timeline">Timeline</a> &middot; <a href="https://github.com/UCR-CS-179K-Summer-2026/project1">UCR-CS-179K-Summer-2026/project1</a>
     </footer>
   </body>
 </html>
