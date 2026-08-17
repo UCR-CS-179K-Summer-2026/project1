@@ -29,7 +29,7 @@ C++
 Requires CMake 3.16+ and a C++17 compiler.
 
 On macOS, install Readline if you want to use the arrow keys to go through
-past commands:
+past commands when using the streamline build:
 
 ```sh
 brew install readline
@@ -85,37 +85,6 @@ Thanks for choosing our program!
 `GET` takes field names and array indexes in the order they should be
 followed. Other operations can be joined with `|` to form a query pipeline.
 
-## Version Control & Benchmarking
-
-Each version used for performance testing gets an ID such as `week3-v1`.
-This makes it clear which version produced each benchmark result. The
-benchmark uses the same file loading and query code as the CLI. It prints the
-five runs and median result in a table, then appends the runs and median to a
-CSV file under `benchmarks/results`. Each computer gets its own CSV file so
-results from different machines can be committed without constantly editing
-the same file.
-
-```sh
-./build/streamline --version
-./build/benchmark
-./build/benchmark --machine lab-mac
-```
-
-Use the same `--machine` label for repeated runs on one computer. Without the
-option, the computer hostname is used. Each row includes the timestamp,
-Streamline version, machine, operating system, architecture, compiler, build
-type, dataset information, sample number, and load/query/total times. Use
-`--output path/to/results.csv` when a specific output file is needed.
-
-The CSV files are intentionally not ignored. After collecting results on each
-computer, add the files under `benchmarks/results` to version control. A future
-HTML visualization can load every CSV in that directory and select the rows
-whose `sample` value is `median` for a simple comparison, or use the numbered
-samples for variability and error bars.
-
-More information about the version IDs and benchmark process is on the
-[design page](https://ucr-cs-179k-summer-2026.github.io/project1/#versioning).
-
 ## Major Features
 
 - **Get** — retrieve the value at a given path in a JSON object.  
@@ -165,3 +134,17 @@ The input is a path to a number value and the output is a number.
     Query: `GROUPBY(GET("a")) | AVERAGE(GET("price"))`
     JSON: `[{"id": 1, "city": "Riverside", "price": 450000}, {"id": 2, "city": "Riverside", "price": 480000}, {"id": 3, "city": "Los Angeles", "price": 800000}, {"id": 4, "city": "Riverside", "price": 460000}]`
     Result: `{"Riverside": 463333.33, "Los Angeles": 800000}`
+
+- **Filter by Average** — `AVERAGE` can also be used *inside* a `FILTER`
+condition instead of as its own pipeline stage, to keep only the records
+(or groups) whose own average clears a threshold. `AVERAGE()` with no
+argument averages the numbers in the current array being tested;
+`AVERAGE(GET("path"))` averages that field across the objects in it.
+
+    Query: `FILTER(AVERAGE() > 4)`
+    JSON: `[[1, 3, 5], [2, 4, 6], [3, 6, 12, 18]]`
+    Result: `[[3, 6, 12, 18]]`
+
+    Query: `FILTER(AVERAGE(GET("price")) > 50)`
+    JSON: `[[{"price": 100}, {"price": 200}, {"price": 300}], [{"price": 10}, {"price": 20}]]`
+    Result: `[[{"price": 100}, {"price": 200}, {"price": 300}]]`
