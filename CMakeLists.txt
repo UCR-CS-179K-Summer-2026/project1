@@ -29,15 +29,16 @@ find_library(READLINE_LIBRARY
 )
 
 set(CORE_SOURCES
-    week3/scanner.cpp
-    week3/parser.cpp
-    week3/file-reader.cpp
-    week3/version.cpp
-    week3/query-parser.cpp
+    week4/file-scanner.cpp
+    week4/file-parser.cpp
+    week4/query-engine.cpp
+    week4/version.cpp
+    week4/query-scanner.cpp
+    week4/query-parser.cpp
 )
 
-add_executable(streamline ${CORE_SOURCES} week3/main.cpp)
-target_include_directories(streamline PRIVATE week3)
+add_executable(streamline ${CORE_SOURCES} week4/main.cpp)
+target_include_directories(streamline PRIVATE week4)
 target_link_libraries(streamline PRIVATE Threads::Threads)
 
 if(READLINE_INCLUDE_DIR AND READLINE_LIBRARY)
@@ -47,11 +48,11 @@ if(READLINE_INCLUDE_DIR AND READLINE_LIBRARY)
 endif()
 
 add_executable(tests ${CORE_SOURCES} tests/correctness/tests.cpp)
-target_include_directories(tests PRIVATE week3)
+target_include_directories(tests PRIVATE week4)
 target_link_libraries(tests PRIVATE Threads::Threads)
 
 add_executable(benchmark ${CORE_SOURCES} tests/performance/benchmark.cpp)
-target_include_directories(benchmark PRIVATE week3)
+target_include_directories(benchmark PRIVATE week4)
 target_link_libraries(benchmark PRIVATE Threads::Threads)
 target_compile_definitions(benchmark PRIVATE
     STREAMLINE_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"

@@ -1,7 +1,7 @@
 #include <iostream>
 
-#include "file-reader.h"
-#include "scanner.h"
+#include "query-engine.h"
+#include "file-scanner.h"
 #include "session.h"
 #include "version.h"
 
@@ -32,7 +32,7 @@ void check(bool ok, const string& label) {
     }
 }
 
-void checkScannerToken(Scanner& scanner, JSONTokenType type, const string& value, const string& name) {
+void checkScannerToken(FileScanner& scanner, JSONTokenType type, const string& value, const string& name) {
     Token token = scanner.scan();
     check(token.type == type && token.value == value, name);
 }
@@ -41,7 +41,7 @@ void checkScannerThrows(const string& input, const string& name) {
     bool threw = false;
 
     try {
-        Scanner scanner(input, ParserType::JSON);
+        FileScanner scanner(input, ParserType::JSON);
         scanner.scan();
     } catch (const exception&) {
         threw = true;
@@ -53,7 +53,7 @@ void checkScannerThrows(const string& input, const string& name) {
 void testScanner() {
     section("scanner");
 
-    Scanner scanner(R"({}[]:,"name" true false null -12.5)", ParserType::JSON);
+    FileScanner scanner(R"({}[]:,"name" true false null -12.5)", ParserType::JSON);
     checkScannerToken(scanner, JSONTokenType::LBrace, "{", "left brace");
     checkScannerToken(scanner, JSONTokenType::RBrace, "}", "right brace");
     checkScannerToken(scanner, JSONTokenType::LBracket, "[", "left bracket");
@@ -67,7 +67,7 @@ void testScanner() {
     checkScannerToken(scanner, JSONTokenType::Number, "-12.5", "number");
     checkScannerToken(scanner, JSONTokenType::End, "", "end");
 
-    Scanner whitespaceScanner("\n\n true", ParserType::JSON);
+    FileScanner whitespaceScanner("\n\n true", ParserType::JSON);
     checkScannerToken(whitespaceScanner, JSONTokenType::Boolean, "true", "whitespace");
     check(whitespaceScanner.getLineNumber() == 3, "line number");
 
@@ -76,7 +76,7 @@ void testScanner() {
 }
 
 string parseAndFormat(const string& text) {
-    Parser parser(text, ParserType::JSON);
+    FileParser parser(text, ParserType::JSON);
     JSONValue value = parser.parse();
     LookupResult whole = {true, &value, ""};
     return formatResult(whole);
@@ -105,7 +105,7 @@ void checkParse(const string& text, const string& want) {
 
 bool parses(const string& text) {
     try {
-        Parser parser(text, ParserType::JSON);
+        FileParser parser(text, ParserType::JSON);
         parser.parse();
         return true;
     } catch (const exception&) {
@@ -122,7 +122,7 @@ void checkInvalid(const string& text) {
 }
 
 void checkLookup(const string& text, const string& path, const string& want) {
-    Parser parser(text, ParserType::JSON);
+    FileParser parser(text, ParserType::JSON);
     Session session;
     session.initialize(parser.parse(), "test");
     string got = excecuteQuery(session, path);
@@ -138,7 +138,7 @@ void checkLookup(const string& text, const string& path, const string& want) {
 
 void checkQuery(const string& text, const string& query, const string& want) {
     try {
-        Parser parser(text, ParserType::JSON);
+        FileParser parser(text, ParserType::JSON);
         Session session;
         session.initialize(parser.parse(), "test");
         string got = excecuteQuery(session, query);
@@ -257,7 +257,7 @@ void testInvalid() {
     
     section("error messages");
     try {
-        Parser parser(R"({"a" 1})", ParserType::JSON);
+        FileParser parser(R"({"a" 1})", ParserType::JSON);
         parser.parse();
         check(false, "missing colon should have thrown");
     } catch (const exception& e) {
@@ -265,7 +265,7 @@ void testInvalid() {
         check(message.find("line 1") != string::npos, "JSON error should say the line number");
     }
     try {
-        Parser parser(R"({"a" 1})", ParserType::JSONL);
+        FileParser parser(R"({"a" 1})", ParserType::JSONL);
         parser.parse();
         check(false, "missing colon should have thrown in JSONL mode too");
     } catch (const exception& e) {
@@ -322,7 +322,7 @@ void testLookup() {
     checkLookup(roster, R"(GET("student", 2, "scores"))", "Error: field 'scores' not found");
     checkLookup(R"({"a":1})", R"(GET("a", "b"))", "Error: cannot look up 'b' on a non-object, non-array value");
 
-    Parser parser(R"({"a":1})", ParserType::JSON);
+    FileParser parser(R"({"a":1})", ParserType::JSON);
     JSONValue root = parser.parse();
     LookupResult missing = get(root, {"missing"});
     check(!missing.ok && missing.value == nullptr, "missing field result");

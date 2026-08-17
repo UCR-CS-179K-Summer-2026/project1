@@ -1,8 +1,8 @@
 // This file is meant to implement the Scanner class, which is responsible for scanning a JSON or JSONL string and producing a sequence of tokens.
 // It also implements the scan() method, which returns the next token in the input string.
-#include "scanner.h"
+#include "file-scanner.h"
 
-Token Scanner::scan() {
+Token FileScanner::scan() {
     while(curr < end && (*curr == ' ' || *curr == '\n' || *curr == '\t' || *curr == '\r')) {
         if(*curr == '\n') {
             ++currLine;

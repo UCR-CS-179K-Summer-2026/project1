@@ -2,7 +2,7 @@
 // It uses the Scanner class to tokenize the input string, and implements a recursive descent parser to build the JSONValue.
 #pragma once
 
-#include "scanner.h"
+#include "file-scanner.h"
 #include "value.h"
 
 #include <iostream>
@@ -10,17 +10,16 @@
 
 using namespace std;
 
-class Parser {
+class FileParser {
     private:
-    Scanner scanner;
+    FileScanner scanner;
     Token currToken;
     ParserType fileType;
 
     public:
-    Parser(string_view json, ParserType type ) : scanner(json, type), currToken(scanner.scan()), fileType(type) {}
+    FileParser(string_view json, ParserType type ) : scanner(json, type), currToken(scanner.scan()), fileType(type) {}
 
     JSONValue parse();
     JSONValue parseObject();
 
-    //string unescapeString(const string_view& str);
 };

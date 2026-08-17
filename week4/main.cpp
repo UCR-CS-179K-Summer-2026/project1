@@ -16,7 +16,7 @@
 
 using namespace std;
 
-#include "file-reader.h"
+#include "query-engine.h"
 #include "session.h"
 #include "version.h"
 

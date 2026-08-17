@@ -1,8 +1,8 @@
 // Jules contributed to this file. This file is meant to implement the Parser class, which is responsible for parsing a JSON or JSONL string and producing a JSONValue.
 // It uses the Scanner class to tokenize the input string, and implements a recursive descent parser to build the JSONValue.
-#include "parser.h"
+#include "file-parser.h"
 
-JSONValue Parser::parse() {
+JSONValue FileParser::parse() {
     if(fileType == ParserType::JSON) {
         if(currToken.type != JSONTokenType::End) {
             JSONValue result = parseObject();
@@ -23,7 +23,7 @@ JSONValue Parser::parse() {
     return JSONValue(move(records));
 }
 
-JSONValue Parser::parseObject() {
+JSONValue FileParser::parseObject() {
     switch(currToken.type) {
         case JSONTokenType::LBrace: {
             vector<pair<string, JSONValue>> object;
@@ -114,39 +114,3 @@ JSONValue Parser::parseObject() {
             throw runtime_error("Unexpected token");
     }
 }
-
-/*
-string Parser::unescapeString(const string_view& str) {
-    string result;
-
-    for (size_t i = 0; i < str.size(); i++) {
-        if (str[i] == '\\' && i + 1 < str.size()) {
-            i++;
-            switch (str[i]) {
-                case '\"': result += '\"'; break;
-                case '\\': result += '\\'; break;
-                case '/':  result += '/';  break;
-                case 'b':  result += '\b'; break;
-                case 'f':  result += '\f'; break;
-                case 'n':  result += '\n'; break;
-                case 'r':  result += '\r'; break;
-                case 't':  result += '\t'; break;
-                case 'u':
-                    if (i + 4 < str.size()) {
-                        string hex = string(str.substr(i + 1, 4));
-                        char16_t codePoint = static_cast<char16_t>(stoi(hex, nullptr, 16));
-                        result += static_cast<char>(codePoint);
-                        i += 4;
-                    }
-
-                    break;
-                default:
-                    continue;
-            }
-        } else {
-            result += str[i];
-        }
-    }
-    return result;
-}
-*/

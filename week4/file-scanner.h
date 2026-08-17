@@ -24,7 +24,7 @@ struct Token {
     Token(JSONTokenType t, string_view v) : type(t), value(v) {}
 };
 
-class Scanner {
+class FileScanner {
     private:
     const char* curr;
     const char* end;
@@ -32,7 +32,7 @@ class Scanner {
     ParserType fileType;
 
     public:
-    Scanner(string_view json, ParserType type) : curr(json.data()), end(json.data() + json.size()), fileType(type) {}
+    FileScanner(string_view json, ParserType type) : curr(json.data()), end(json.data() + json.size()), fileType(type) {}
     
     int getLineNumber() const { return currLine; }
     Token scan();

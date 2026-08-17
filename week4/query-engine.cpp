@@ -1,7 +1,7 @@
 // Person 2's contribution: reads a .json or .jsonl file into JSONValue
 // records via Person 1's Parser, and implements path lookup/formatting
 // against the resulting tree.
-#include "file-reader.h"
+#include "query-engine.h"
 
 #include <algorithm>
 #include <thread>
@@ -305,10 +305,10 @@ void uploadFile(const string& path, Session& session) {
     JSONValue temp = JSONValue(nullptr);
 
     if(extension == ".jsonl") {
-        Parser p(contents, ParserType::JSONL);
+        FileParser p(contents, ParserType::JSONL);
         temp = p.parse();
     } else {
-        Parser p(contents, ParserType::JSON);
+        FileParser p(contents, ParserType::JSON);
         temp = p.parse();
     }
 
