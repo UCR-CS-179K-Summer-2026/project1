@@ -1,0 +1,5 @@
+/Users/javierherrerajr/Library/CloudStorage/Dropbox/school/ucr/cs179k/project1/build/CMakeFiles/streamline.dir
+/Users/javierherrerajr/Library/CloudStorage/Dropbox/school/ucr/cs179k/project1/build/CMakeFiles/tests.dir
+/Users/javierherrerajr/Library/CloudStorage/Dropbox/school/ucr/cs179k/project1/build/CMakeFiles/benchmark.dir
+/Users/javierherrerajr/Library/CloudStorage/Dropbox/school/ucr/cs179k/project1/build/CMakeFiles/edit_cache.dir
+/Users/javierherrerajr/Library/CloudStorage/Dropbox/school/ucr/cs179k/project1/build/CMakeFiles/rebuild_cache.dir

@@ -802,17 +802,6 @@ $ ./streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'</code
             </tr>
           </tbody>
         </table>
-
-        <div class="callout">
-          <strong>Known gaps, not yet fixed:</strong> a multi-record <code>.jsonl</code> upload
-          only captures its first record right now (<code>Session</code> holds one
-          <code>JSONValue</code>, and the file is parsed as a single document rather than
-          line-by-line the way Sprint 1's <code>readJsonlFile()</code> did). A bare scalar
-          value followed by trailing content (e.g. <code>"a": 1</code> with no wrapping
-          braces) can also slip through unrejected. Neither crashes anything — both are
-          correctness gaps we know about and are choosing to leave for a follow-up rather
-          than rush before the demo.
-        </div>
       </section>
 
       <section id="query-language">
@@ -1038,14 +1027,6 @@ $ ./streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'</code
           library call.
         </p>
 
-        <div class="callout">
-          <strong>Measured, not assumed:</strong> parsing <code>json/students.json</code>
-          (85,032 records) takes ~185&ndash;215&nbsp;ms either way — the JSON parser itself
-          isn't what these two optimizations target, and its own timing is unchanged. What did
-          change is <code>AVERAGE(GET("gpa"))</code>'s query time, isolated from parsing, on the
-          same machine and dataset:
-        </div>
-
         <table>
           <thead>
             <tr><th>Version</th><th>Query time (median of 5)</th><th>Change</th></tr>
@@ -1089,11 +1070,31 @@ $ ./streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'</code
           presentation.
         </p>
         <ul class="muted">
-          <li><!-- e.g. R. P. Brent, "The parallel evaluation of general arithmetic expressions," JACM, 1974 --></li>
-          <li><!-- e.g. work-depth / PRAM model reference --></li>
-          <li><!-- e.g. cppreference: std::execution, std::transform_reduce --></li>
-          <li><!-- e.g. Amdahl's Law reference --></li>
-          <li><!-- add more as you go --></li>
+          <li>
+            <strong>Average-case vs. amortized analysis</strong> —
+            <a href="https://www.geeksforgeeks.org/dsa/difference-between-average-case-and-amortized-analysis/">GeeksforGeeks: Difference Between Average Case and Amortized Analysis</a>
+            — the distinction behind the <code>get()</code> fast-path fix: worst-case
+            complexity is unchanged, the win is in the expected/average cost on typical input.
+          </li>
+          <li>
+            <strong>Brent's theorem &amp; the PRAM model</strong> —
+            <a href="https://www.youtube.com/watch?v=3LS_xbGi7Ko">YouTube: Brent's Theorem and the PRAM model</a>
+            — the work/depth framing behind the parallel <code>AVERAGE</code> reduction's
+            <code>T&#8339; = O(n/p + p)</code> bound.
+          </li>
+          <li>
+            <strong>Multithreaded algorithms, formally</strong> —
+            <a href="https://www.cs.mcgill.ca/~akroit/math/compsci/Cormen%20Introduction%20to%20Algorithms.pdf">Cormen, Leiserson, Rivest, Stein — <em>Introduction to Algorithms</em>, Ch. 27 "Multithreaded Algorithms"</a>
+            — the textbook treatment of the same work/span analysis and fork-join model behind
+            the <code>sumField</code> partition/map/merge reduction.
+          </li>
+          <li>
+            <strong>Amdahl's Law</strong> —
+            <a href="https://www.geeksforgeeks.org/computer-organization-architecture/computer-organization-amdahls-law-and-its-proof/">GeeksforGeeks: Amdahl's Law and Its Proof</a>
+            — why the parallel <code>AVERAGE</code> reduction's measured speedup falls short
+            of a naive <code>n/p</code> estimate: part of the remaining time is memory-bound
+            tree traversal, not parallelizable arithmetic.
+          </li>
         </ul>
       </section>
 
@@ -1167,16 +1168,6 @@ cmake --build build       # (re)build — only recompiles what changed
           — so the test suite and the benchmark are both exercising the exact same engine the
           CLI runs, not a separate copy.
         </p>
-
-        <div class="callout">
-          <strong>A build that silently didn't build:</strong> for a stretch this sprint,
-          <code>query-parser.cpp</code> was missing from <code>CORE_SOURCES</code> — every
-          other file compiled fine, and the failure only showed up at the final link step
-          (<code>undefined symbols: QueryParser::parse()</code>), which is easy to miss if
-          you only skim compiler output for the word "error" on the wrong line. It recurred
-          more than once after a fresh pull before it stuck — worth checking
-          <code>CORE_SOURCES</code> first if a fresh clone ever fails to link.
-        </div>
       </section>
 
       <section id="versioning">
