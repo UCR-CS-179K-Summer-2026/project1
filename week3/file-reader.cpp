@@ -4,12 +4,49 @@
 #include "file-reader.h"
 
 #include <algorithm>
+#include <thread>
 #include <unordered_map>
 
 namespace {
 
 LookupResult queryError(const string& message) {
     return {false, nullptr, message};
+}
+
+// Compares an object key against a GET(...) path segment for equality.
+//
+// Technique: fast path / slow path optimization. The naive version called
+// unescapeString(a) == unescapeString(b) unconditionally, which heap-allocates
+// two new strings on every single key comparison during a linear object scan
+// (see get() below) -- the dominant cost in the pipeline's hottest loop.
+//
+// Both a and b are stored in raw/escaped form (unescapeString is only run
+// here, on demand, never when the tree is built). unescapeString is a pure,
+// deterministic function, which licenses two shortcuts that preserve the
+// exact same result as the naive version while skipping the allocation in
+// the common case:
+bool keysEqual(string_view a, string_view b) {
+    // Fast path 1: raw byte comparison (~memcmp), zero allocation. Equal
+    // inputs to a pure function always produce equal outputs, so if the raw
+    // bytes already match, unescapeString(a) == unescapeString(b) is
+    // guaranteed true without computing either side.
+    if (a == b) {
+        return true;
+    }
+
+    // Fast path 2: identity-transform check. unescapeString only changes a
+    // string when it contains a '\' escape sequence -- with no backslash on
+    // either side, unescapeString(x) == x for both, so the raw mismatch we
+    // already observed above is a real mismatch. Still zero allocation.
+    if (a.find('\\') == string_view::npos && b.find('\\') == string_view::npos) {
+        return false;
+    }
+
+    // Slow path: only reached when the raw bytes differ AND at least one
+    // side could plausibly decode into something the other side equals
+    // (e.g. differently-escaped spellings of the same character). This is
+    // the rare case, so paying for the two allocations here is fine.
+    return unescapeString(a) == unescapeString(b);
 }
 
 bool valuesEqual(const JSONValue& lhs, const JSONValue& rhs) {
@@ -137,19 +174,101 @@ string groupKeyText(const JSONValue& value) {
     }
 }
 
-pair<double, size_t> sumField(const ArrayValue& arr, const vector<string_view>& path) {
+// Per-chunk accumulator for the parallel reduction below. hasTypeError
+// replaces the old inline `throw` -- a worker thread throwing across the
+// thread boundary is undefined behavior (the exception would need to
+// unwind into a stack frame that no longer exists once join() returns), so
+// each chunk reports its own error status and the caller decides whether
+// to throw, back on the main thread, after every worker has finished.
+struct PartialSum {
     double sum = 0;
     size_t count = 0;
-    for (const auto& record : arr) {
-        LookupResult found = get(record, path);
+    bool hasTypeError = false;
+};
+
+// The original sequential body, unchanged, now scoped to a [begin, end)
+// slice of arr instead of the whole array. This is the "map" step: each
+// thread runs this independently over its own slice with no shared
+// mutable state, so no locking is needed here.
+PartialSum sumFieldRange(const ArrayValue& arr, size_t begin, size_t end, const vector<string_view>& path) {
+    PartialSum result;
+    for (size_t i = begin; i < end; i++) {
+        LookupResult found = get(arr[i], path);
         if (!found.ok) {
             continue;
         }
         if (found.value->getType() != ValueType::Number) {
+            result.hasTypeError = true;
+            continue;
+        }
+        result.sum += get<double>(found.value->getValue());
+        result.count++;
+    }
+    return result;
+}
+
+// Below this many records, thread creation/teardown overhead (each
+// std::thread costs real time to spin up and join) would cost more than
+// the parallel work saves -- this is the "+p" term in Brent's theorem
+// (T_p = O(n/p + p)) actually mattering when n is small. Sequential
+// fallback below the threshold sidesteps that overhead entirely.
+constexpr size_t PARALLEL_THRESHOLD = 10000;
+
+pair<double, size_t> sumField(const ArrayValue& arr, const vector<string_view>& path) {
+    size_t n = arr.size();
+
+    unsigned int hwThreads = thread::hardware_concurrency();
+    size_t threadCount = hwThreads == 0 ? 1 : static_cast<size_t>(hwThreads);
+
+    if (n < PARALLEL_THRESHOLD || threadCount <= 1) {
+        PartialSum result = sumFieldRange(arr, 0, n, path);
+        if (result.hasTypeError) {
             throw runtime_error("AVERAGE field is not a number on every record");
         }
-        sum += get<double>(found.value->getValue());
-        count++;
+        return {result.sum, result.count};
+    }
+
+    // Partition: split arr into threadCount contiguous, non-overlapping
+    // slices (each ~n/threadCount records) instead of one record at a
+    // time -- this keeps each thread's memory access sequential/cache-
+    // friendly rather than interleaved, and keeps synchronization to just
+    // the join() below (no per-record locking).
+    size_t chunkSize = (n + threadCount - 1) / threadCount;
+    vector<PartialSum> partials(threadCount);
+    vector<thread> workers;
+    workers.reserve(threadCount);
+
+    for (size_t t = 0; t < threadCount; t++) {
+        size_t begin = t * chunkSize;
+        size_t end = min(begin + chunkSize, n);
+        if (begin >= end) {
+            break;
+        }
+        // Map: each thread reduces its own slice into partials[t]
+        // independently -- this is the O(n/p) parallel work term.
+        workers.emplace_back([&, begin, end, t]() {
+            partials[t] = sumFieldRange(arr, begin, end, path);
+        });
+    }
+    for (thread& worker : workers) {
+        worker.join();
+    }
+
+    // Reduce: merge the (small, ~threadCount-sized) set of partial results
+    // sequentially on the main thread. This is the O(p) term in Brent's
+    // theorem -- negligible next to the O(n/p) map phase for realistic
+    // core counts, so it isn't worth parallelizing further here.
+    double sum = 0;
+    size_t count = 0;
+    bool hasTypeError = false;
+    for (const PartialSum& partial : partials) {
+        sum += partial.sum;
+        count += partial.count;
+        hasTypeError = hasTypeError || partial.hasTypeError;
+    }
+
+    if (hasTypeError) {
+        throw runtime_error("AVERAGE field is not a number on every record");
     }
     return {sum, count};
 }
@@ -444,7 +563,7 @@ LookupResult get(const JSONValue& value, const vector<string_view>& path) {
 
             const JSONValue* found = nullptr;
             for (const auto& entry : obj) {
-                if (unescapeString(entry.first) == unescapeString(prop)) {
+                if (keysEqual(entry.first, prop)) {
                     found = &entry.second;
                     break;
                 }

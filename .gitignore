@@ -6,6 +6,7 @@ build/
 *.dylib
 *.dSYM/
 a.out
+benchmarks/
 
 # Editors
 .vscode/
@@ -22,7 +23,3 @@ cmake_install.cmake
 compile_commands.json
 __cmake_systeminformation/
 CMakePresets.json
-
-# manually-compiled binaries from the g++ one-liners in file comments
-week*/demo
-week*/test_lookup

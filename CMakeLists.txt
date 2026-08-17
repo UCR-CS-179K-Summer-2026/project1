@@ -15,6 +15,9 @@ else()
     add_compile_options(-w)
 endif()
 
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
 find_path(READLINE_INCLUDE_DIR
     NAMES readline/readline.h
     HINTS /opt/homebrew/opt/readline/include /usr/local/opt/readline/include
@@ -35,6 +38,7 @@ set(CORE_SOURCES
 
 add_executable(streamline ${CORE_SOURCES} week3/main.cpp)
 target_include_directories(streamline PRIVATE week3)
+target_link_libraries(streamline PRIVATE Threads::Threads)
 
 if(READLINE_INCLUDE_DIR AND READLINE_LIBRARY)
     target_include_directories(streamline PRIVATE ${READLINE_INCLUDE_DIR})
@@ -44,9 +48,11 @@ endif()
 
 add_executable(tests ${CORE_SOURCES} tests/correctness/tests.cpp)
 target_include_directories(tests PRIVATE week3)
+target_link_libraries(tests PRIVATE Threads::Threads)
 
 add_executable(benchmark ${CORE_SOURCES} tests/performance/benchmark.cpp)
 target_include_directories(benchmark PRIVATE week3)
+target_link_libraries(benchmark PRIVATE Threads::Threads)
 target_compile_definitions(benchmark PRIVATE
     STREAMLINE_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
     STREAMLINE_SYSTEM_NAME="${CMAKE_SYSTEM_NAME}"
