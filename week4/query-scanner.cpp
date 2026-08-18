@@ -144,16 +144,21 @@ QueryToken QueryScanner::scan() {
     }
 
     if((*curr >= '0' && *curr <= '9') || *curr == '-') {
-        const char* numberBegin = curr;
+        static const regex numberRegex(R"(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)");
+
+        cmatch match;
+        if(regex_search(curr, end, match, numberRegex, regex_constants::match_continuous)) {
+            string_view num(curr, match.length());
+            curr += match.length();
+            return QueryToken(QueryTokenType::Number, num);
+        } 
+        /*const char* numberBegin = curr;
 
         while(curr < end && *curr != ',' && *curr != ')' && *curr != '\"' && *curr != '(' && *curr != '|' && *curr != '=' && *curr != '!' && *curr != '<' && *curr != '>'
                 && *curr != ' ' && *curr != '\t' && *curr != '\n' && *curr != '\r') {
             curr++;
         }
 
-        // Hand-rolled equivalent of -?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?,
-        // matched in full (same as regex_match). Avoids allocating a string and
-        // running a backtracking regex engine per number.
         const char* numberEnd = curr;
         const char* p = numberBegin;
         bool valid = true;
@@ -192,6 +197,7 @@ QueryToken QueryScanner::scan() {
             string_view num(numberBegin, numberEnd - numberBegin);
             return QueryToken(QueryTokenType::Number, num);
         }
+        */
     }
 
     throw runtime_error("Query contains an unrecognized character");

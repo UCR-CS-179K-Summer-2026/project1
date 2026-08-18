@@ -93,17 +93,22 @@ Token FileScanner::scan() {
     }
 
     if((*curr >= '0' && *curr <= '9') || *curr == '-') {
-        const char* numberBegin = curr;
+        static const regex numberRegex(R"(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)");
+
+        cmatch match;
+        if(regex_search(curr, end, match, numberRegex, regex_constants::match_continuous)) {
+            string_view num(curr, match.length());
+            curr += match.length();
+            return Token(JSONTokenType::Number, num);
+        } 
+
+        /*const char* numberBegin = curr;
 
         while(curr < end && *curr != ',' && *curr != ']' && *curr != '}' && *curr != ':'
                 && *curr != ' ' && *curr != '\t' && *curr != '\n' && *curr != '\r') {
             curr++;
         }
 
-        // Hand-rolled equivalent of -?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?,
-        // matched in full (same as regex_match). Avoids allocating a string and
-        // running a backtracking regex engine per number, which dominated parse
-        // time on number-heavy input.
         const char* numberEnd = curr;
         const char* p = numberBegin;
         bool valid = true;
@@ -141,7 +146,7 @@ Token FileScanner::scan() {
         if(valid && p == numberEnd) {
             string_view num(numberBegin, numberEnd - numberBegin);
             return Token(JSONTokenType::Number, num);
-        }
+        }*/
     }
 
     if(fileType == ParserType::JSON) {
