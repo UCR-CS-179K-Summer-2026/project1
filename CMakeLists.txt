@@ -5,9 +5,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release)
-endif()
+#We cannot use a debugger due to this.
+set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 
 if(MSVC)
     add_compile_options(/w)
