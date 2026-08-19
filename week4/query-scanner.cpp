@@ -9,78 +9,82 @@ QueryToken QueryScanner::scan() {
         return QueryToken(QueryTokenType::End, {});
     }
 
-    if(*curr == '(') {
-        curr++;
-        return QueryToken(QueryTokenType::LParen, "(");
-    }
-    if(*curr == ')') {
-        curr++;
-        return QueryToken(QueryTokenType::RParen, ")");
-    }
-    if(*curr == ',') {
-        curr++;
-        return QueryToken(QueryTokenType::Comma, ",");
-    }
-    if(*curr == '|') {
-        curr++;
-        return QueryToken(QueryTokenType::Pipe, "|");
-    }
+    switch(*curr) {
+        case '(':
+            curr++;
+            return QueryToken(QueryTokenType::LParen, "(");
+        case ')':
+            curr++;
+            return QueryToken(QueryTokenType::RParen, ")");
+        case ',':
+            curr++;
+            return QueryToken(QueryTokenType::Comma, ",");
+        case '|':
+            curr++;
+            return QueryToken(QueryTokenType::Pipe, "|");
 
-    if(*curr == '=' && curr + 1 < end && *(curr + 1) == '=') {
-        curr += 2;
-        return QueryToken(QueryTokenType::Eq, "==");
-    }
-    if(*curr == '!' && curr + 1 < end && *(curr + 1) == '=') {
-        curr += 2;
-        return QueryToken(QueryTokenType::Neq, "!=");
-    }
-    if(*curr == '<' && curr + 1 < end && *(curr + 1) == '=') {
-        curr += 2;
-        return QueryToken(QueryTokenType::Leq, "<=");
-    }
-    if(*curr == '<') {
-        curr++;
-        return QueryToken(QueryTokenType::Lt, "<");
-    }
-    if(*curr == '>' && curr + 1 < end && *(curr + 1) == '=') {
-        curr += 2;
-        return QueryToken(QueryTokenType::Geq, ">=");
-    }
-    if(*curr == '>') {
-        curr++;
-        return QueryToken(QueryTokenType::Gt, ">");
-    }
-
-    if(*curr == '\"') {
-        curr++;
-        const char* stringBegin = curr;
-
-        while(curr < end && *curr != '\"') {
-            if(*curr == '\\' && curr + 1 < end) {
-                if(*(curr + 1) == 'u' && curr + 5 < end) {
-                    curr += 6;  // skip \uXXXX
-                } else if (*(curr + 1) == '\"' || *(curr + 1) == '\\' || *(curr + 1) == '/' ||
-                           *(curr + 1) == 'b' || *(curr + 1) == 'f' || *(curr + 1) == 'n' ||
-                           *(curr + 1) == 'r' || *(curr + 1) == 't') {
-                    curr += 2;  // skip escaped character
-                } else {
-                    throw runtime_error("Query contains illegal escape sequence in string");
-                }
-
-            } else if(static_cast<unsigned char>(*curr) < 0x20) {
-                throw runtime_error("Query contains illegal escape sequence in string");
-            } else {
-                curr++;
+        case '=':
+            if(curr + 1 < end && *(curr + 1) == '=') {
+                curr += 2;
+                return QueryToken(QueryTokenType::Eq, "==");
             }
+            break;
+        case '!':
+            if(curr + 1 < end && *(curr + 1) == '=') {
+                curr += 2;
+                return QueryToken(QueryTokenType::Neq, "!=");
+            }
+            break;
+        case '<':
+            if(curr + 1 < end && *(curr + 1) == '=') {
+                curr += 2;
+                return QueryToken(QueryTokenType::Leq, "<=");
+            }
+            curr++;
+            return QueryToken(QueryTokenType::Lt, "<");
+        
+        case '>':
+            if(curr + 1 < end && *(curr + 1) == '=') {
+                curr += 2;
+                return QueryToken(QueryTokenType::Geq, ">=");
+            }
+            curr++;
+            return QueryToken(QueryTokenType::Gt, ">");
+
+        case '\"': {
+            curr++;
+            const char* stringBegin = curr;
+
+            while(curr < end && *curr != '\"') {
+                if(*curr == '\\' && curr + 1 < end) {
+                    if(*(curr + 1) == 'u' && curr + 5 < end) {
+                        curr += 6;  // skip \uXXXX
+                    } else if (*(curr + 1) == '\"' || *(curr + 1) == '\\' || *(curr + 1) == '/' ||
+                            *(curr + 1) == 'b' || *(curr + 1) == 'f' || *(curr + 1) == 'n' ||
+                            *(curr + 1) == 'r' || *(curr + 1) == 't') {
+                        curr += 2;  // skip escaped character
+                    } else {
+                        throw runtime_error("Query contains illegal escape sequence in string");
+                    }
+
+                } else if(static_cast<unsigned char>(*curr) < 0x20) {
+                    throw runtime_error("Query contains illegal escape sequence in string");
+                } else {
+                    curr++;
+                }
+            }
+
+            if(curr >= end) {
+                throw runtime_error("Unterminated string");
+            }
+
+            string_view str(stringBegin, curr - stringBegin);
+            curr++;  // skip closing quote
+            return QueryToken(QueryTokenType::String, str);
         }
 
-        if(curr >= end) {
-            throw runtime_error("Unterminated string");
-        }
-
-        string_view str(stringBegin, curr - stringBegin);
-        curr++;  // skip closing quote
-        return QueryToken(QueryTokenType::String, str);
+        default:
+            break;
     }
 
     if( (*curr >= 'A' && *curr <= 'Z') || (*curr >= 'a' && *curr <= 'z')) {
@@ -93,8 +97,8 @@ QueryToken QueryScanner::scan() {
 
         string_view ident(identStart, curr - identStart);
 
-        auto it = keywordTable.find(ident);
-        if (it != keywordTable.end()) {
+        auto it = queryKeywordTable.find(ident);
+        if (it != queryKeywordTable.end()) {
             return QueryToken(it->second, ident);
         }
         throw runtime_error("Query contains an unrecognized keyword");

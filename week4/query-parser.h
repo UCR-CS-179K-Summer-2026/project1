@@ -1,5 +1,9 @@
 #pragma once
 
+#include <charconv>
+
+using namespace std;
+
 #include "query-scanner.h"
 
 //The following structs are used as nodes for an expression tree

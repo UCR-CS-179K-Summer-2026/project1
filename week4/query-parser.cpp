@@ -115,7 +115,12 @@ void QueryParser::parseLimit() {
         throw runtime_error("Expected number in LIMIT");
     }
 
-    int size = stoi(string(currToken.value));
+    //int size = stoi(string(currToken.value));
+    int size;
+    auto [ptr, ec] = from_chars(currToken.value.data(), currToken.value.data() + currToken.value.size(), size);
+    if (ec != errc() || ptr != currToken.value.data() + currToken.value.size()) {
+        throw runtime_error("Expected number in LIMIT");
+    }
     if(size < 0) {
         throw runtime_error("LIMIT size must be non-negative");
     }
@@ -278,7 +283,11 @@ NodeId QueryParser::parseOperand() {
         }
 
         case QueryTokenType::Number: {
-            double num = stod(string(currToken.value));
+            double num;
+            auto [ptr, ec] = from_chars(currToken.value.data(), currToken.value.data() + currToken.value.size(), num);
+            if (ec != errc() || ptr != currToken.value.data() + currToken.value.size()) {
+                throw runtime_error("Invalid number literal " + string(currToken.value));
+            }
             NodeId node = allocateNode(NumberOperand{num});
             advance();
             return node;

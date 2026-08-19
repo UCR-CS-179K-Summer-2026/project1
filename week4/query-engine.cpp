@@ -312,7 +312,7 @@ void uploadFile(const string& path, Session& session) {
         temp = p.parse();
     }
 
-    session.initialize(temp, name);
+    session.initialize(move(temp), name);
 }
 
 string excecuteQuery(Session& session, const string& query) {

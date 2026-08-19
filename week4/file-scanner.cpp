@@ -20,76 +20,77 @@ Token FileScanner::scan() {
         return Token(JSONTokenType::End, {});
     }
 
-    if(*curr == '{') {
-        curr++;
-        return Token(JSONTokenType::LBrace, "{");
-    }
-    if(*curr == '}') {
-        curr++;
-        return Token(JSONTokenType::RBrace, "}");
-    }
-    if(*curr == '[') {
-        curr++;
-        return Token(JSONTokenType::LBracket, "[");
-    }
-    if(*curr == ']') {
-        curr++;
-        return Token(JSONTokenType::RBracket, "]");
-    }
-    if(*curr == ':') {
-        curr++;
-        return Token(JSONTokenType::Colon, ":");
-    }
-    if(*curr == ',') {
-        curr++;
-        return Token(JSONTokenType::Comma, ",");
-    }
+    switch(*curr) {
+        case '{':
+            curr++;
+            return Token(JSONTokenType::LBrace, "{");
+        case '}':
+            curr++;
+            return Token(JSONTokenType::RBrace, "}");
+        case '[':
+            curr++;
+            return Token(JSONTokenType::LBracket, "[");
+        case ']':
+            curr++;
+            return Token(JSONTokenType::RBracket, "]");
+        case ':':
+            curr++;
+            return Token(JSONTokenType::Colon, ":");
+        case ',':
+            curr++;
+            return Token(JSONTokenType::Comma, ",");
 
-    if(*curr == '\"') {
-        curr++;
-        const char* stringBegin = curr;
+        case '\"': {
+            curr++;
+            const char* stringBegin = curr;
 
-        while(curr < end && *curr != '\"') {
-            if(*curr == '\\' && curr + 1 < end) {
-                if(*(curr + 1) == 'u' && curr + 5 < end) {
-                    curr += 6;  // skip \uXXXX
-                } else if (*(curr + 1) == '\"' || *(curr + 1) == '\\' || *(curr + 1) == '/' ||
-                           *(curr + 1) == 'b' || *(curr + 1) == 'f' || *(curr + 1) == 'n' ||
-                           *(curr + 1) == 'r' || *(curr + 1) == 't') {
-                    curr += 2;  // skip escaped character
+            while(curr < end && *curr != '\"') {
+                if(*curr == '\\' && curr + 1 < end) {
+                    if(*(curr + 1) == 'u' && curr + 5 < end) {
+                        curr += 6;  // skip \uXXXX
+                    } else if (*(curr + 1) == '\"' || *(curr + 1) == '\\' || *(curr + 1) == '/' ||
+                            *(curr + 1) == 'b' || *(curr + 1) == 'f' || *(curr + 1) == 'n' ||
+                            *(curr + 1) == 'r' || *(curr + 1) == 't') {
+                        curr += 2;  // skip escaped character
+                    } else {
+                        throw runtime_error("Illegal escape sequence in string at line " + to_string(currLine));
+                    }
+
+                } else if(static_cast<unsigned char>(*curr) < 0x20) {
+                    throw runtime_error("Illegal unescaped control character in string at line " + to_string(currLine));
                 } else {
-                    throw runtime_error("Illegal escape sequence in string at line " + to_string(currLine));
+                    curr++;
                 }
-
-            } else if(static_cast<unsigned char>(*curr) < 0x20) {
-                throw runtime_error("Illegal unescaped control character in string at line " + to_string(currLine));
-            } else {
-                curr++;
             }
+
+            if(curr >= end) {
+                throw runtime_error("Unterminated string");
+            }
+
+            string_view str(stringBegin, curr - stringBegin);
+            curr++;  // skip closing quote
+            return Token(JSONTokenType::String, str);
         }
 
-        if(curr >= end) {
-            throw runtime_error("Unterminated string");
+        default:
+            break;
+    }
+
+    if(*curr >= 'a' && *curr <= 'z') {
+        const char* identStart = curr;
+
+        while(curr < end && *curr != ',' && *curr != ')' && *curr != '\"' && *curr != '(' && *curr != ']' && *curr != '[' && *curr != '}' && *curr != '{' && *curr != ':'
+                && *curr != ' ' && *curr != '\t' && *curr != '\n' && *curr != '\r') {
+            curr++;
         }
 
-        string_view str(stringBegin, curr - stringBegin);
-        curr++;  // skip closing quote
-        return Token(JSONTokenType::String, str);
-    }
+        string_view ident(identStart, curr - identStart);
 
-    if(*curr == 't' && curr + 3 < end && *(curr + 1) == 'r' && *(curr + 2) == 'u' && *(curr + 3) == 'e') {
-        curr += 4;
-        return Token(JSONTokenType::Boolean, "true");
-    }
-
-    if(*curr == 'f' && curr + 4 < end && *(curr + 1) == 'a' && *(curr + 2) == 'l' && *(curr + 3) == 's' && *(curr + 4) == 'e') {
-        curr += 5;
-        return Token(JSONTokenType::Boolean, "false");
-    }
-
-    if(*curr == 'n' && curr + 3 < end && *(curr + 1) == 'u' && *(curr + 2) == 'l' && *(curr + 3) == 'l') {
-        curr += 4;
-        return Token(JSONTokenType::Null, "null");
+        auto it = keywordTable.find(ident);
+        if (it != keywordTable.end()) {
+            return Token(it->second, ident);
+        }
+        throw runtime_error("Invalid input at line " + to_string(currLine));
     }
 
     if((*curr >= '0' && *curr <= '9') || *curr == '-') {

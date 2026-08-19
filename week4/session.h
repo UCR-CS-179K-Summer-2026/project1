@@ -16,8 +16,7 @@ struct Session {
     int records = 0;
 
     void initialize(JSONValue v, string n) {
-        file = v;
-        name = n;
+        name = move(n);
         
         if(v.getType() == ValueType::Array) {
             records = get<ArrayValue>(v.getValue()).size();
@@ -27,6 +26,7 @@ struct Session {
             records = 1;
         }
         
+        file = move(v);
         isInitialized = true;
     }
 };

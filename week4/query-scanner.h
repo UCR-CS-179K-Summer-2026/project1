@@ -1,11 +1,11 @@
 #include "value.h"
 
 #include <cstdint>
-#include <unordered_map>
 #include <regex>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -28,7 +28,7 @@ struct QueryToken {
     }
 };
 
-static const unordered_map<string_view, QueryTokenType> keywordTable = {
+static const unordered_map<string_view, QueryTokenType> queryKeywordTable = {
     {"AND",     QueryTokenType::And},
     {"OR",      QueryTokenType::Or},
     {"GET",     QueryTokenType::Identifier},
