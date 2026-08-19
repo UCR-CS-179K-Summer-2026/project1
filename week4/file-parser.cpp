@@ -6,6 +6,11 @@ JSONValue FileParser::parse() {
     if(fileType == ParserType::JSON) {
         if(currToken.type != JSONTokenType::End) {
             JSONValue result = parseObject();
+
+            if(currToken.type != JSONTokenType::End) {
+                throw runtime_error("Trailing content");
+            }
+            
             return result;
         }
 

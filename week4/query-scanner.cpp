@@ -83,67 +83,6 @@ QueryToken QueryScanner::scan() {
         return QueryToken(QueryTokenType::String, str);
     }
 
-    /*
-    if(*curr == 'A' && curr + 2 < end && *(curr + 1) == 'N' && *(curr + 2) == 'D') {
-        curr += 3;
-        return QueryToken(QueryTokenType::And, "AND");
-    }
-
-    if(*curr == 'O' && curr + 1 < end && *(curr + 1) == 'R') {
-        curr += 2;
-        return QueryToken(QueryTokenType::Or, "OR");
-    }
-
-    if(*curr == 'G' && curr + 2 < end && *(curr + 1) == 'E' && *(curr + 2) == 'T') {
-        curr += 3;
-        return QueryToken(QueryTokenType::Identifier, "GET");
-    }
-
-    if(*curr == 'F' && curr + 5 < end && *(curr + 1) == 'I' && *(curr + 2) == 'L' && *(curr + 3) == 'T' && *(curr + 4) == 'E' && *(curr + 5) == 'R') {
-        curr += 6;
-        return QueryToken(QueryTokenType::Identifier, "FILTER");
-    }
-
-    if(*curr == 'S' && curr + 3 < end && *(curr + 1) == 'O' && *(curr + 2) == 'R' && *(curr + 3) == 'T') {
-        curr += 4;
-        return QueryToken(QueryTokenType::Identifier, "SORT");
-    }
-
-    if(*curr == 'L' && curr + 4 < end && *(curr + 1) == 'I' && *(curr + 2) == 'M' && *(curr + 3) == 'I' && *(curr + 4) == 'T') {
-        curr += 5;
-        return QueryToken(QueryTokenType::Identifier, "LIMIT");
-    }
-
-    if(*curr == 'G' && curr + 6 < end && *(curr + 1) == 'R' && *(curr + 2) == 'O' && *(curr + 3) == 'U' && *(curr + 4) == 'P' && *(curr + 5) == 'B' && *(curr + 6) == 'Y') {
-        curr += 7;
-        return QueryToken(QueryTokenType::Identifier, "GROUPBY");
-    }
-
-    if(*curr == 'A' && curr + 6 < end && *(curr + 1) == 'V' && *(curr + 2) == 'E' && *(curr + 3) == 'R' && *(curr + 4) == 'A' && *(curr + 5) == 'G' && *(curr + 6) == 'E') {
-        curr += 7;
-        return QueryToken(QueryTokenType::Identifier, "AVERAGE");
-    }
-
-    if(*curr == 'A' && curr + 2 < end && *(curr + 1) == 'S' && *(curr + 2) == 'C') {
-        curr += 3;
-        return QueryToken(QueryTokenType::Identifier, "ASC");
-    }
-
-    if(*curr == 'D' && curr + 3 < end && *(curr + 1) == 'E' && *(curr + 2) == 'S' && *(curr + 3) == 'C') {
-        curr += 4;
-        return QueryToken(QueryTokenType::Identifier, "DESC");
-    }
-
-    if(*curr == 't' && curr + 3 < end && *(curr + 1) == 'r' && *(curr + 2) == 'u' && *(curr + 3) == 'e') {
-        curr += 4;
-        return QueryToken(QueryTokenType::Boolean, "true");
-    }
-
-    if(*curr == 'f' && curr + 4 < end && *(curr + 1) == 'a' && *(curr + 2) == 'l' && *(curr + 3) == 's' && *(curr + 4) == 'e') {
-        curr += 5;
-        return QueryToken(QueryTokenType::Boolean, "false");
-    }
-    */
     if( (*curr >= 'A' && *curr <= 'Z') || (*curr >= 'a' && *curr <= 'z')) {
         const char* identStart = curr;
 
