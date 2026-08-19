@@ -1,9 +1,11 @@
 #include "value.h"
 
 #include <cstdint>
+#include <regex>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -24,6 +26,21 @@ struct QueryToken {
         }
         return unescapeString(value);
     }
+};
+
+static const unordered_map<string_view, QueryTokenType> queryKeywordTable = {
+    {"AND",     QueryTokenType::And},
+    {"OR",      QueryTokenType::Or},
+    {"GET",     QueryTokenType::Identifier},
+    {"FILTER",  QueryTokenType::Identifier},
+    {"SORT",    QueryTokenType::Identifier},
+    {"LIMIT",   QueryTokenType::Identifier},
+    {"GROUPBY", QueryTokenType::Identifier},
+    {"AVERAGE", QueryTokenType::Identifier},
+    {"ASC",     QueryTokenType::Identifier},
+    {"DESC",    QueryTokenType::Identifier},
+    {"true",    QueryTokenType::Boolean},
+    {"false",   QueryTokenType::Boolean},
 };
 
 class QueryScanner {

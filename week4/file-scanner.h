@@ -4,9 +4,11 @@
 
 #include <cstdint>
 #include <iostream>
+#include <regex>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 
 using namespace std;
 
@@ -22,6 +24,12 @@ struct Token {
     string_view value;
 
     Token(JSONTokenType t, string_view v) : type(t), value(v) {}
+};
+
+static const unordered_map<string_view, JSONTokenType> keywordTable = {
+    {"true", JSONTokenType::Boolean},
+    {"false", JSONTokenType::Boolean},
+    {"null", JSONTokenType::Null}
 };
 
 class FileScanner {

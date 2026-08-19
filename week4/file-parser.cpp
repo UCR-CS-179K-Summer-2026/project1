@@ -6,6 +6,11 @@ JSONValue FileParser::parse() {
     if(fileType == ParserType::JSON) {
         if(currToken.type != JSONTokenType::End) {
             JSONValue result = parseObject();
+
+            if(currToken.type != JSONTokenType::End) {
+                throw runtime_error("Trailing content");
+            }
+
             return result;
         }
 
@@ -94,7 +99,11 @@ JSONValue FileParser::parseObject() {
         }
 
         case JSONTokenType::Number: {
-            double num = stod(string(currToken.value));
+            double num;
+            auto [ptr, ec] = from_chars(currToken.value.data(), currToken.value.data() + currToken.value.size(), num);
+            if (ec != errc() || ptr != currToken.value.data() + currToken.value.size()) {
+                throw runtime_error("Invalid number literal at line " + to_string(scanner.getLineNumber()));
+            }
             currToken = scanner.scan();
             return JSONValue(num);
         }
