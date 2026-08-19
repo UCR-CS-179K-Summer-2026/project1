@@ -83,6 +83,7 @@ QueryToken QueryScanner::scan() {
         return QueryToken(QueryTokenType::String, str);
     }
 
+    /*
     if(*curr == 'A' && curr + 2 < end && *(curr + 1) == 'N' && *(curr + 2) == 'D') {
         curr += 3;
         return QueryToken(QueryTokenType::And, "AND");
@@ -141,6 +142,23 @@ QueryToken QueryScanner::scan() {
     if(*curr == 'f' && curr + 4 < end && *(curr + 1) == 'a' && *(curr + 2) == 'l' && *(curr + 3) == 's' && *(curr + 4) == 'e') {
         curr += 5;
         return QueryToken(QueryTokenType::Boolean, "false");
+    }
+    */
+    if( (*curr >= 'A' && *curr <= 'Z') || (*curr >= 'a' && *curr <= 'z')) {
+        const char* identStart = curr;
+
+        while(curr < end && *curr != ',' && *curr != ')' && *curr != '\"' && *curr != '(' && *curr != '|' && *curr != '=' && *curr != '!' && *curr != '<' && *curr != '>'
+                && *curr != ' ' && *curr != '\t' && *curr != '\n' && *curr != '\r') {
+            curr++;
+        }
+
+        string_view ident(identStart, curr - identStart);
+
+        auto it = keywordTable.find(ident);
+        if (it != keywordTable.end()) {
+            return QueryToken(it->second, ident);
+        }
+        throw runtime_error("Query contains an unrecognized keyword");
     }
 
     if((*curr >= '0' && *curr <= '9') || *curr == '-') {
