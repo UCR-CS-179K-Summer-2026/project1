@@ -57,6 +57,12 @@
         font-weight: 500;
       }
       header .links a:hover { text-decoration: underline; }
+      header .links a.pending { opacity: 0.6; }
+      header .links a.pending::after {
+        content: " (soon)";
+        font-size: 0.78em;
+        font-weight: 400;
+      }
 
       nav {
         position: sticky;
@@ -84,8 +90,8 @@
         padding: 2.5rem 1.5rem 4rem;
       }
 
-      section { 
-        margin-bottom: 3rem; 
+      section {
+        margin-bottom: 3rem;
         position: relative;
         display: flex;
         flex-flow: column nowrap;
@@ -185,6 +191,7 @@
         padding: 0.6rem 1rem;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 0.9rem;
+        text-align: center;
       }
       .hierarchy .connector {
         color: var(--fg-muted);
@@ -220,6 +227,7 @@
         padding: 1rem 1.2rem;
         margin-bottom: 1rem;
         background: var(--box-bg);
+        scroll-margin-top: 4.5rem;
       }
       .feature h3 { margin-top: 0; }
       .feature dl { margin: 0.5rem 0 0; }
@@ -231,6 +239,25 @@
         margin-top: 0.6rem;
       }
       .feature dd { margin: 0.15rem 0 0; }
+
+      /* quick jump strip for the tutorial's feature menu */
+      .jump {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin: 0.6rem 0 1.4rem;
+      }
+      .jump a {
+        font-size: 0.82rem;
+        font-weight: 500;
+        color: var(--accent);
+        text-decoration: none;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 0.3rem 0.75rem;
+        background: var(--bg-alt);
+      }
+      .jump a:hover { border-color: var(--accent); }
 
       .status {
         display: inline-block;
@@ -268,6 +295,28 @@
         padding: 0.8rem 1rem;
         border-radius: 0 6px 6px 0;
         font-size: 0.92rem;
+      }
+
+      /* placeholder / "fill this in" blocks, distinct from .callout */
+      .todo {
+        border: 1px dashed var(--border);
+        border-radius: 8px;
+        padding: 0.9rem 1rem;
+        font-size: 0.9rem;
+        color: var(--fg-muted);
+      }
+      .todo .tag {
+        display: inline-block;
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--accent);
+        border: 1px solid var(--accent);
+        border-radius: 4px;
+        padding: 0.05rem 0.4rem;
+        margin-right: 0.5rem;
+        vertical-align: middle;
       }
 
       .diagram {
@@ -366,57 +415,204 @@
       <div class="links">
         <a href="https://github.com/UCR-CS-179K-Summer-2026/project1">Repo</a>
         <a href="https://github.com/UCR-CS-179K-Summer-2026/project1/blob/main/README.md">README</a>
+        <!-- TODO(Javier): point this at the recorded video demo before final submission -->
+        <a href="#" class="pending" title="Not recorded yet">Video Demo</a>
       </div>
     </header>
 
     <nav>
+      <a href="#tutorial">Tutorial</a>
       <a href="#architecture">Architecture</a>
-      <a href="#roles">Team &amp; Roles</a>
       <a href="#classes">Classes &amp; Data Model</a>
-      <a href="#interfaces">Module Interfaces</a>
-      <a href="#edge-cases">Edge Cases</a>
-      <a href="#query-language">Query Language</a>
-      <a href="#algorithms">Algorithms &amp; Optimizations</a>
+      <a href="#modules">Major Modules</a>
+      <a href="#algorithms">Algorithms</a>
+      <a href="#optimizations">Optimizations &amp; Refactoring</a>
       <a href="#references">References</a>
+      <a href="#testing">Testing</a>
+      <a href="#benchmarking">Benchmarking</a>
+      <a href="#limitations">Limitations</a>
       <a href="#build-system">Build System</a>
-      <a href="#versioning">Versioning &amp; Benchmarking</a>
+      <a href="#roles">Team &amp; Roles</a>
       <a href="#timeline">Timeline</a>
     </nav>
 
     <main>
-      <section id="architecture">
-        <h2>System Architecture</h2>
+      <section id="tutorial">
+        <h2>Tutorial</h2>
         <p>
-          Streamline is built around <strong>two independent parsers</strong>, not one. The
-          first is the JSON parser from Sprint 1 — a <strong>Scanner</strong> tokenizes raw
-          text and a <strong>Parser</strong> builds a tree of <code>JSONValue</code> nodes
-          (each one a tagged <code>std::variant</code>). The second, is a
-          completely separate <strong>query-language parser</strong> — its own
-          <code>QueryScanner</code> and <code>QueryParser</code> — that turns a query string
-          like <code>FILTER(GET("gpa") &gt; 3.5) | LIMIT(5)</code> into an expression tree,
-          which an <strong>execution engine</strong> then walks, one pipeline stage at a
-          time, against the uploaded document.
+          Streamline reads a <code>.json</code> or <code>.jsonl</code> file into memory once,
+          then runs as many queries against it as you want through a small pipeline language —
+          <code>GET</code>, <code>FILTER</code>, <code>SORT</code>, <code>LIMIT</code>,
+          <code>GROUPBY</code>, and <code>AVERAGE</code>, chained together with <code>|</code>.
+        </p>
+
+        <h3>Getting started</h3>
+        <p class="muted">Requires CMake 3.16+ and a C++17 compiler. One build produces everything:</p>
+        <pre><code>cmake -B build
+cmake --build build</code></pre>
+        <p class="muted">
+          Three binaries come out of <code>build/</code>: <code>streamline</code> (the CLI),
+          <code>tests</code> (the correctness suite — see <a href="#testing">Testing</a>), and
+          <code>benchmark</code> (the performance harness — see
+          <a href="#benchmarking">Benchmarking</a>). Installing
+          <a href="https://formulae.brew.sh/formula/readline">Readline</a>
+          (<code>brew install readline</code> on macOS) is optional — <code>streamline</code>
+          picks it up automatically for arrow-key history and still builds fine without it.
+        </p>
+
+        <h3>Walkthrough</h3>
+        <p class="muted">
+          Run with no arguments for the interactive menu. Upload a file once, then query it as
+          many times as you want without re-reading it from disk:
+        </p>
+        <pre><code>$ ./build/streamline
+[MENU]  u upload   s search   m menu   q quit
+&gt; u
+Enter path to your file: json/students.json
+File students.json uploaded successfully. (85032 records)
+[students.json] &gt; s
+Enter your search query: GROUPBY(GET("major")) | AVERAGE(GET("gpa"))
+{ "Computer Science": 2.998, "Statistics": 3.003, ... }
+
+$ ./build/streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'</code></pre>
+        <p class="muted">
+          <code>GET</code> takes field names and array indexes in the order they should be
+          followed; every other stage chains onto whatever came before it with <code>|</code>.
+        </p>
+
+        <h3>Feature menu</h3>
+        <p class="muted">Jump straight to any operation — every example below is a real query run against the actual binary, not hand-written.</p>
+        <div class="jump">
+          <a href="#feat-get">Get</a>
+          <a href="#feat-filter">Filter &amp; Comparison</a>
+          <a href="#feat-sort">Sort</a>
+          <a href="#feat-limit">Limit</a>
+          <a href="#feat-groupby">GroupBy</a>
+          <a href="#feat-average">Average</a>
+          <a href="#feat-filter-average">Filter by Average</a>
+          <a href="#feat-piping">Piping</a>
+        </div>
+
+        <div class="feature" id="feat-get">
+          <h3>Get <span class="status done">done</span></h3>
+          <p>Retrieve the value at a given path. Multiple arguments walk into nested objects/arrays.</p>
+          <dl>
+            <dt>Query</dt><dd><code>GET("student","name")</code></dd>
+            <dt>JSON</dt><dd><code>{"student":{"name":"Ryan","scores":[90,85]}}</code></dd>
+            <dt>Result</dt><dd><code>"Ryan"</code></dd>
+          </dl>
+        </div>
+
+        <div class="feature" id="feat-filter">
+          <h3>Filter &amp; Comparison <span class="status done">done</span></h3>
+          <p>Keep only the records matching a boolean expression — comparisons combine with <code>AND</code> / <code>OR</code>, not just one condition.</p>
+          <dl>
+            <dt>Query</dt><dd><code>FILTER(GET("a") &gt; 1)</code></dd>
+            <dt>JSON</dt><dd><code>[{"a": 1, "b": 2}, {"a": 2, "b": 2}]</code></dd>
+            <dt>Result</dt><dd><code>[{"a": 2, "b": 2}]</code></dd>
+            <dt>Also works</dt><dd><code>FILTER(GET("major") == "CS" AND GET("gpa") &gt; 3.5)</code></dd>
+          </dl>
+        </div>
+
+        <div class="feature" id="feat-sort">
+          <h3>Sort <span class="status done">done</span></h3>
+          <p>Order an array of records by a field, ascending or descending.</p>
+          <dl>
+            <dt>Query</dt><dd><code>SORT(GET("a"), ASC)</code></dd>
+            <dt>JSON</dt><dd><code>[{"a": 1, "b": 2}, {"a": 0, "b": 3}]</code></dd>
+            <dt>Result</dt><dd><code>[{"a": 0, "b": 3}, {"a": 1, "b": 2}]</code></dd>
+          </dl>
+        </div>
+
+        <div class="feature" id="feat-limit">
+          <h3>Limit <span class="status done">done</span></h3>
+          <p>Return only the first N records.</p>
+          <dl>
+            <dt>Query</dt><dd><code>LIMIT(1)</code></dd>
+            <dt>JSON</dt><dd><code>[{"a": 1, "b": 2}, {"a": 0, "b": 3}]</code></dd>
+            <dt>Result</dt><dd><code>[{"a": 1, "b": 2}]</code></dd>
+          </dl>
+        </div>
+
+        <div class="feature" id="feat-groupby">
+          <h3>GroupBy <span class="status done">done</span></h3>
+          <p>Bucket records by the value of a field.</p>
+          <dl>
+            <dt>Query</dt><dd><code>GROUPBY(GET("a"))</code></dd>
+            <dt>JSON</dt><dd><code>[{"a": 1, "b": 2}, {"a": 0, "b": 3}, {"a": 1, "b": 5}]</code></dd>
+            <dt>Result</dt><dd><code>{"1": [{"a": 1, "b": 2}, {"a": 1, "b": 5}], "0": [{"a": 0, "b": 3}]}</code></dd>
+          </dl>
+        </div>
+
+        <div class="feature" id="feat-average">
+          <h3>Average <span class="status done">done</span></h3>
+          <p>Compute the mean of a field. Works standalone (one number) or right after <code>GROUPBY</code> (one number per group, same code path).</p>
+          <dl>
+            <dt>Query</dt><dd><code>GROUPBY(GET("city")) | AVERAGE(GET("price"))</code></dd>
+            <dt>JSON</dt><dd><code>[{"id":1,"city":"Riverside","price":450000}, {"id":2,"city":"Riverside","price":480000}, {"id":3,"city":"Los Angeles","price":800000}, {"id":4,"city":"Riverside","price":460000}]</code></dd>
+            <dt>Result</dt><dd><code>{"Riverside": 463333.33, "Los Angeles": 800000}</code></dd>
+          </dl>
+        </div>
+
+        <div class="feature" id="feat-filter-average">
+          <h3>Filter by Average <span class="status done">done</span></h3>
+          <p>
+            <code>AVERAGE</code> can also appear <em>inside</em> a <code>FILTER</code> condition
+            instead of running as its own pipeline stage. There it averages the numbers in
+            whatever array is currently being tested per record, so it filters records (or
+            groups) against their <em>own</em> average rather than a single global one.
+          </p>
+          <dl>
+            <dt>Query</dt><dd><code>FILTER(AVERAGE() &gt; 4)</code></dd>
+            <dt>JSON</dt><dd><code>[[1, 3, 5], [2, 4, 6], [3, 6, 12, 18]]</code></dd>
+            <dt>Result</dt><dd><code>[[3, 6, 12, 18]]</code></dd>
+            <dt>Also works</dt><dd><code>FILTER(AVERAGE(GET("price")) &gt; 50)</code> against an array of record-arrays — averages <code>price</code> within each inner array before comparing.</dd>
+          </dl>
+        </div>
+
+        <div class="feature" id="feat-piping">
+          <h3>Piping, chained without limit <span class="status done">done</span></h3>
+          <p><code>|</code> threads one stage's output into the next. There's no fixed cap on how many stages can chain — tested up to 50 in a row with no issue.</p>
+          <dl>
+            <dt>Query</dt><dd><code>FILTER(GET("gpa") &gt; 3.9) | SORT(GET("gpa"), DESC) | LIMIT(3)</code></dd>
+            <dt>Behavior</dt><dd>Each stage sees the <em>previous</em> stage's result, not the original document — a stage checks whether it got the shape it needs (array vs. object) and errors cleanly if not.</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section id="architecture">
+        <h2>Architecture</h2>
+        <p>
+          Streamline is built around <strong>two independent parsers</strong>. One is the
+          JSON/JSONL parser — a <strong>FileScanner</strong> tokenizes raw text and a
+          <strong>FileParser</strong> builds a tree of <code>JSONValue</code> nodes (each a
+          tagged <code>std::variant</code>). The other is a completely separate
+          <strong>query-language parser</strong> — its own <code>QueryScanner</code> and
+          <code>QueryParser</code> — that turns a query string like
+          <code>FILTER(GET("gpa") &gt; 3.5) | LIMIT(5)</code> into an expression tree, which an
+          <strong>execution engine</strong> then walks, one pipeline stage at a time, against the
+          uploaded document.
         </p>
 
         <h3>Loading a file</h3>
         <div class="pipeline">
           <div class="stage">
             <div class="owner">Jules</div>
-            <h4>Scanner (lexer)</h4>
+            <h4>FileScanner (lexer)</h4>
             <ul>
-              <li><code>scanner.h</code> / <code>scanner.cpp</code></li>
-              <li><code>Scanner::scan()</code></li>
-              <li>emits one <code>Token</code> at a time</li>
+              <li><code>file-scanner.h</code> / <code>file-scanner.cpp</code></li>
+              <li><code>FileScanner::scan()</code></li>
+              <li>emits one <code>Token</code> at a time; keywords resolved through a lookup table</li>
             </ul>
           </div>
           <div class="arrow">&#8594;</div>
           <div class="stage">
             <div class="owner">Jules</div>
-            <h4>Parser &amp; data model</h4>
+            <h4>FileParser &amp; data model</h4>
             <ul>
-              <li><code>parser.h</code> / <code>parser.cpp</code></li>
+              <li><code>file-parser.h</code> / <code>file-parser.cpp</code></li>
               <li><code>value.h</code> — <code>JSONValue</code> (variant)</li>
-              <li><code>Parser::parse()</code></li>
+              <li><code>FileParser::parse()</code></li>
             </ul>
           </div>
           <div class="arrow">&#8594;</div>
@@ -432,8 +628,8 @@
         </div>
         <p class="muted">
           The whole uploaded document becomes a single <code>JSONValue</code> stored on
-          <code>Session::file</code> — not a list of records the way Sprint 1's
-          <code>readFile()</code> returned one. Every query then runs against that one value.
+          <code>Session::file</code>. Every query then runs against that one value — see
+          <a href="#limitations">Limitations</a> for the cost that currently comes with that.
         </p>
 
         <h3>Running a query</h3>
@@ -442,14 +638,14 @@
             <div class="owner">Jules</div>
             <h4>QueryScanner / QueryParser</h4>
             <ul>
-              <li><code>query-parser.h</code> / <code>.cpp</code></li>
-              <li>tokenizes <code>FILTER</code> / <code>SORT</code> / <code>GROUPBY</code> / …</li>
+              <li><code>query-scanner.h</code> / <code>.cpp</code>, <code>query-parser.h</code> / <code>.cpp</code></li>
+              <li>tokenizes <code>FILTER</code> / <code>SORT</code> / <code>GROUPBY</code> / … via a keyword table</li>
               <li>recursive-descent — comparisons, <code>AND</code> / <code>OR</code></li>
             </ul>
           </div>
           <div class="arrow">&#8594;</div>
           <div class="stage">
-            <div class="owner">Jules &amp; Javier</div>
+            <div class="owner">Jules</div>
             <h4>Expression tree</h4>
             <ul>
               <li><code>ExpressionNode</code> — a variant, indexed by <code>NodeId</code></li>
@@ -462,7 +658,7 @@
             <div class="owner">Javier</div>
             <h4><code>excecuteQuery()</code></h4>
             <ul>
-              <li><code>file-reader.cpp</code></li>
+              <li><code>query-engine.cpp</code></li>
               <li>walks each <code>QueryFunction</code> in order</li>
               <li>evaluates <code>FILTER</code> / <code>SORT</code> / <code>LIMIT</code> / <code>GROUPBY</code> / <code>AVERAGE</code></li>
             </ul>
@@ -480,47 +676,9 @@
         </p>
 
         <figure class="diagram">
-          <img src="assets/architecture-diagram.png" alt="Streamline architecture diagram: file loading pipeline (Scanner → Parser → Session) and query execution pipeline (QueryScanner/QueryParser → Expression tree → excecuteQuery)">
+          <img src="assets/architecture-diagram.png" alt="Streamline architecture diagram: file loading pipeline (FileScanner → FileParser → Session) and query execution pipeline (QueryScanner/QueryParser → Expression tree → excecuteQuery)">
           <figcaption>End-to-end architecture — file loading and query execution pipelines.</figcaption>
         </figure>
-      </section>
-
-      <section id="roles">
-        <h2>Team &amp; Roles</h2>
-        <p class="muted">Roles shifted between sprints as the project grew from "parse and look up one path" to a real query language — this reflects who owns what now, not the original Sprint 1 split.</p>
-        <div class="roles">
-          <div class="card">
-            <div class="owner">Jules</div>
-            <h4>JSON parser, escaping &amp; query grammar</h4>
-            <ul>
-              <li><code>Scanner</code> / <code>Parser</code> for JSON, and the strict escape/control-character validation on top</li>
-              <li>Fixed <code>\uXXXX</code> decoding to correctly combine surrogate pairs and UTF-8-encode the result — emoji now decode and compare correctly</li>
-              <li>Designed and built <code>QueryScanner</code> / <code>QueryParser</code> — the tokenizer and recursive-descent grammar for the query language itself, including <code>AND</code> / <code>OR</code></li>
-              <li>Fixed <code>.jsonl</code> parsing/scanning correctness (the <code>jsonl-parser-fix</code> branch)</li>
-              <li>Replaced the scanner's per-number <code>regex_match</code> validation with a hand-rolled digit-by-digit grammar check — see <a href="#algorithms">Algorithms</a></li>
-            </ul>
-          </div>
-          <div class="card">
-            <div class="owner">Javier</div>
-            <h4>Query execution engine &amp; performance</h4>
-            <ul>
-              <li>Implemented <code>FILTER</code>, <code>SORT</code>, <code>LIMIT</code>, <code>GROUPBY</code>, and <code>AVERAGE</code> against Jules's expression tree in <code>excecuteQuery()</code></li>
-              <li>Sort-key precomputation and hash-map grouping (see <a href="#algorithms">Algorithms</a>) instead of the naive O(n log n) / O(n·groups) approach</li>
-              <li>Found and fixed several crash bugs (type-mismatch comparisons, non-numeric <code>AVERAGE</code>, invalid <code>GROUPBY</code> keys) so bad input fails cleanly instead of taking the program down</li>
-              <li>Fast-path key comparison in <code>get()</code> — cut <code>AVERAGE</code>'s measured query time from 40.7ms to 30.2ms on the 85k-record benchmark by skipping unnecessary <code>unescapeString</code> allocations (see <a href="#algorithms">Algorithms</a>)</li>
-              <li>Parallelized <code>sumField</code>'s reduction across threads (map/partition/merge) — a further 40.7ms &rarr; 28.0ms combined, with a portable <code>std::thread</code> implementation instead of <code>std::execution::par</code> (unsupported by default on this project's Clang/libc++ toolchain)</li>
-            </ul>
-          </div>
-          <div class="card">
-            <div class="owner">Ryan</div>
-            <h4>CLI &amp; benchmarking cleanup</h4>
-            <ul>
-              <li><code>Session</code>-based CLI (<code>main.cpp</code>) — menu-driven upload-once, query-many-times flow, plus later CLI polish passes</li>
-              <li>Colorized <code>PASS</code>/<code>FAIL</code> output for the regression suite (<code>tests/correctness/tests.cpp</code>)</li>
-              <li>CSV export for the benchmark harness (<code>benchmarks/results/&lt;machine&gt;.csv</code>), plus formatting cleanup on the benchmark table itself</li>
-            </ul>
-          </div>
-        </div>
       </section>
 
       <section id="classes">
@@ -531,7 +689,7 @@
           <code>getType()</code> derives the
           <code>ValueType</code> straight from <code>variant::index()</code> (the enum's
           declaration order is kept in sync with the variant's alternative order), and every
-          caller downstream — <code>lookup()</code>, <code>formatValue()</code> — reads the
+          caller downstream — <code>get()</code>, <code>formatValue()</code> — reads the
           payload with <code>std::get&lt;T&gt;(value.getValue())</code> once the type is known.
         </p>
 
@@ -548,21 +706,21 @@
           </div>
         </div>
 
-        <h3>Previous structure: polymorphism</h3>
+        <h3>Design rationale: a variant, not polymorphism</h3>
         <p class="muted">
-          Sprint 1 started with <code>JSONValue</code> as an abstract base class with a
-          virtual <code>getType()</code>, and one concrete leaf class per
-          <code>ValueType</code> — <code>JSONNull</code>, <code>JSONBoolean</code>,
+          The alternative worth naming here is polymorphism: an abstract <code>JSONValue</code>
+          base with a virtual <code>getType()</code>, one concrete leaf class per
+          <code>ValueType</code> (<code>JSONNull</code>, <code>JSONBoolean</code>,
           <code>JSONNumber</code>, <code>JSONString</code>, <code>JSONArray</code>,
-          <code>JSONObject</code>. Every node was heap-allocated behind a
-          <code>JSONValuePtr</code> (<code>unique_ptr&lt;JSONValue&gt;</code>), and arrays/objects
-          held <code>vector&lt;JSONValuePtr&gt;</code> / <code>vector&lt;pair&lt;string,
-          JSONValuePtr&gt;&gt;</code> — a pointer per child rather than the child itself.
+          <code>JSONObject</code>), and every node heap-allocated behind a
+          <code>JSONValuePtr</code> (<code>unique_ptr&lt;JSONValue&gt;</code>) — arrays/objects
+          would hold a <code>vector</code> of pointers-to-children rather than the children
+          themselves. That's not what this codebase does, and the table below is why:
         </p>
 
         <table>
           <thead>
-            <tr><th></th><th>Polymorphism (before)</th><th>Variant (now)</th></tr>
+            <tr><th></th><th>Polymorphism</th><th>Variant (used here)</th></tr>
           </thead>
           <tbody>
             <tr>
@@ -594,46 +752,46 @@
         </table>
 
         <p class="muted">
-          For a JSON tree with thousands of nodes, the polymorphic version did thousands of
-          individual heap allocations (one <code>make_unique</code> per value) and paid a
+          For a JSON tree with thousands of nodes, the polymorphic version does thousands of
+          individual heap allocations (one <code>make_unique</code> per value) and pays a
           vtable-pointer's worth of memory on <em>every single node</em>, including leaves
-          like a lone <code>true</code> or a short number. Traversing the tree meant chasing
-          pointers across whatever the allocator scattered them across, which is unfriendly
-          to the cache. The variant version allocates once per <code>vector</code>'s backing
-          storage (amortized across all of that container's children) instead of once per
-          value, drops the vtable pointer entirely, and keeps sibling values next to each
-          other in memory. Since our whole premise (per the README) is staying fast and
-          low-memory on large files, that tradeoff was worth making even though it meant
-          giving up some of the OOP ergonomics — <code>isString()</code> / <code>isArray()</code>-style
-          helpers, for example, are gone, replaced by a single <code>switch(getType())</code>
-          at each call site.
+          like a lone <code>true</code> or a short number. Traversing the tree means chasing
+          pointers across wherever the allocator scattered them, which is unfriendly to the
+          cache. The variant version allocates once per <code>vector</code>'s backing storage
+          (amortized across all of that container's children) instead of once per value, drops
+          the vtable pointer entirely, and keeps sibling values next to each other in memory.
+          Since the whole premise is staying fast and low-memory on large files, that tradeoff
+          is worth making even though it gives up some OOP ergonomics —
+          <code>isString()</code> / <code>isArray()</code>-style helpers, for example, don't
+          exist; every call site does a single <code>switch(getType())</code> instead.
         </p>
 
         <p class="muted">
-          The honest tradeoff in the other direction: <code>sizeof(JSONValue)</code> is now
-          at least as big as its largest alternative (<code>ObjectValue</code>, a
+          The honest tradeoff in the other direction: <code>sizeof(JSONValue)</code> is at
+          least as big as its largest alternative (<code>ObjectValue</code>, a
           <code>vector</code> of key/value pairs) plus a small tag, so a node that's "just a
-          bool" is heavier in isolation than a bare <code>JSONBoolean</code> used to be. That
-          cost is paid once per node either way (inline now vs. on the heap before) — it's a
-          wash on a small tree, and a clear win once the allocation count and pointer-chasing
-          start to dominate on a large one.
+          bool" is heavier in isolation than a bare <code>JSONBoolean</code> would be. That
+          cost is paid once per node either way (inline now vs. on the heap otherwise) — a wash
+          on a small tree, and a clear win once allocation count and pointer-chasing start to
+          dominate on a large one.
         </p>
 
         <h3>A second, parallel data model: the query's expression tree</h3>
         <p class="muted">
           <code>JSONValue</code> represents <em>data</em>. Queries need their own tree to
           represent a <em>program</em> — <code>FILTER(GET("gpa") &gt; 3.5)</code> is a small
-          expression, and <code>QueryParser</code> builds it the same variant-based way
-          Sprint 1's data model works: an <code>ExpressionNode</code> is a tagged
+          expression, and <code>QueryParser</code> builds it the same variant-based way the
+          data model above works: an <code>ExpressionNode</code> is a tagged
           <code>std::variant</code>, and every node lives in one flat <code>vector</code>,
           referenced by a <code>NodeId</code> (an index into that vector) rather than by
           pointer.
         </p>
 
         <div class="hierarchy">
-          <div class="base">ExpressionNode<br><span class="muted" style="font-size:0.75rem">variant&lt;BooleanOperand, StringOperand, NumberOperand, GetOperand, BinaryOperand&gt;</span></div>
+          <div class="base">ExpressionNode<br><span class="muted" style="font-size:0.75rem">variant&lt;AverageOperand, BooleanOperand, StringOperand, NumberOperand, GetOperand, BinaryOperand&gt;</span></div>
           <div class="connector">&#9660;</div>
           <div class="leaves">
+            <div class="leaf">AverageOperand<small>vector&lt;string_view&gt; path — averages a field across the array being evaluated</small></div>
             <div class="leaf">BooleanOperand<small>true / false literal</small></div>
             <div class="leaf">StringOperand<small>"literal" text</small></div>
             <div class="leaf">NumberOperand<small>numeric literal</small></div>
@@ -647,7 +805,10 @@
           possible: it doesn't hold its operands directly, it holds two more <code>NodeId</code>s
           — so a comparison, an <code>AND</code>, and an <code>OR</code> are all the same struct,
           and evaluating one just means recursively evaluating whatever nodes its <code>left</code>
-          and <code>right</code> point at. A separate <code>QueryFunction</code> variant
+          and <code>right</code> point at. <code>AverageOperand</code> is what makes
+          <a href="#feat-filter-average">Filter by Average</a> possible — it can appear as an
+          operand inside the very same expression tree a comparison does. A separate
+          <code>QueryFunction</code> variant
           (<code>Get</code> / <code>Filter</code> / <code>Sort</code> / <code>Limit</code> / <code>GroupBy</code> / <code>Average</code>)
           represents the pipeline stages themselves, each one pointing into this same node
           vector for whatever expression it needs (a <code>FILTER</code>'s condition, a
@@ -655,32 +816,32 @@
         </p>
       </section>
 
-      <section id="interfaces">
-        <h2>Module Interfaces</h2>
+      <section id="modules">
+        <h2>Major Modules</h2>
 
-        <h3>Scanner (Jules)</h3>
-        <p class="muted">Turns raw text into one <code>Token</code> at a time, on demand, rather than tokenizing the whole input up front. Tracks its own line number and knows whether it's scanning a <code>.json</code> or <code>.jsonl</code> buffer, so it can phrase errors accordingly.</p>
-        <pre><code>enum class TokenType : uint8_t {
+        <h3>File scanner (Jules)</h3>
+        <p class="muted">Turns raw text into one <code>Token</code> at a time, on demand, rather than tokenizing the whole input up front. Tracks its own line number and knows whether it's scanning a <code>.json</code> or <code>.jsonl</code> buffer, so it can phrase errors accordingly. <code>true</code>/<code>false</code>/<code>null</code> resolve through a static keyword table instead of one character-chain per word.</p>
+        <pre><code>enum class JSONTokenType : uint8_t {
     Boolean, Colon, Comma, End, LBrace, LBracket,
-    Null, Number, RBrace, RBracket, String
+    Null, Number, ObjEnd, RBrace, RBracket, String
 };
 enum class ParserType { JSONL, JSON };
 
 struct Token {
-    TokenType type;
+    JSONTokenType type;
     string_view value;  // view into the original buffer, no copy
-    Token(TokenType t, string_view v);
+    Token(JSONTokenType t, string_view v);
 };
 
-class Scanner {
+class FileScanner {
 public:
-    Scanner(string_view json, ParserType type);
+    FileScanner(string_view json, ParserType type);
     int getLineNumber() const;
     Token scan();  // advances and returns the next token
 };</code></pre>
 
-        <h3>Parser &amp; data model (Jules)</h3>
-        <p class="muted">Recursive-descent parser: one <code>parse()</code> call per JSON value, recursing for nested objects/arrays. <code>JSONValue</code> is returned by value now — a tagged <code>variant</code>, not a heap-owned pointer.</p>
+        <h3>File parser &amp; data model (Jules)</h3>
+        <p class="muted">Recursive-descent parser: one <code>parseObject()</code> call per JSON value, recursing for nested objects/arrays. <code>JSONValue</code> is returned by value — a tagged <code>variant</code>, not a heap-owned pointer. The top-level <code>JSON</code> branch now checks that nothing follows a parsed value, so a bare scalar with trailing content is rejected instead of silently accepted.</p>
         <pre><code>enum class ValueType : uint8_t { Array, Boolean, Null, Number, Object, String };
 
 using ArrayValue = vector&lt;JSONValue&gt;;
@@ -699,15 +860,22 @@ public:
     const variant&lt;ArrayValue, bool, nullptr_t, double, ObjectValue, string&gt;&amp; getValue() const;
 };
 
-class Parser {
+class FileParser {
 public:
-    Parser(string_view json, ParserType type);
+    FileParser(string_view json, ParserType type);
     JSONValue parse();
+    JSONValue parseObject();
 };</code></pre>
 
-        <h3>Query parser (Jules)</h3>
-        <p class="muted">Its own recursive-descent grammar, entirely separate from the JSON parser above. <code>parsePipeline()</code> splits on <code>|</code>; each stage's <code>parseFilter()</code> / <code>parseSort()</code>/etc. builds <code>ExpressionNode</code>s as needed and pushes one <code>QueryFunction</code>.</p>
-        <pre><code>class QueryParser {
+        <h3>Query scanner &amp; parser (Jules)</h3>
+        <p class="muted">Its own recursive-descent grammar, entirely separate from the JSON parser above. Keywords (<code>AND</code>, <code>OR</code>, <code>GET</code>, <code>FILTER</code>, <code>SORT</code>, <code>LIMIT</code>, <code>GROUPBY</code>, <code>AVERAGE</code>, <code>ASC</code>, <code>DESC</code>, <code>true</code>, <code>false</code>) resolve through a static table after the identifier is scanned. <code>parsePipeline()</code> splits on <code>|</code>; each stage's <code>parseFilter()</code> / <code>parseSort()</code> / etc. builds <code>ExpressionNode</code>s as needed and pushes one <code>QueryFunction</code>.</p>
+        <pre><code>class QueryScanner {
+public:
+    explicit QueryScanner(string_view query);
+    QueryToken scan();
+};
+
+class QueryParser {
 public:
     explicit QueryParser(string_view query);
     void parse();
@@ -717,13 +885,13 @@ public:
 };</code></pre>
 
         <h3>Session &amp; execution engine (Ryan &amp; Javier)</h3>
-        <p class="muted"><code>Session</code> holds the uploaded document; <code>excecuteQuery()</code> runs a query string against it and returns the formatted result (or a formatted error) as one <code>string</code> — no exceptions escape past it for a malformed query, they're caught by the caller in <code>main.cpp</code>. <code>Session</code> now also tracks the uploaded file's display name and record count directly, so the CLI doesn't need a separate wrapper struct to show "file uploaded (N records)".</p>
+        <p class="muted"><code>Session</code> holds the uploaded document; <code>excecuteQuery()</code> runs a query string against it and returns the formatted result (or a formatted error) as one <code>string</code> — no exceptions escape past it for a malformed query, they're caught by the caller in <code>main.cpp</code>. <code>Session::initialize()</code> now moves its arguments into place rather than copying them (see <a href="#optimizations">Optimizations</a>).</p>
         <pre><code>struct Session {
     JSONValue file = JSONValue(nullptr);
     bool isInitialized = false;
     string name = "";
     int records = 0;
-    void initialize(JSONValue v, string n);
+    void initialize(JSONValue v, string n);  // moves v/n into place
 };
 
 void uploadFile(const string&amp; path, Session&amp; session);
@@ -739,222 +907,195 @@ LookupResult get(const JSONValue&amp; value, const vector&lt;string_view&gt;&amp
 string formatResult(const LookupResult&amp; result);</code></pre>
 
         <h3>CLI (Ryan)</h3>
-        <p class="muted">Menu-driven: upload a file once, then run as many queries against it as you want without re-reading the file. The direct <code>argv</code> form still works too for scripting.</p>
-        <pre><code>$ ./streamline
-[MENU]  u upload   s search   m menu   q quit
-&gt; u
-Enter path to your file: json/students.json
-File students.json uploaded successfully. (85032 records)
-[students.json] &gt; s
-Enter your search query: GROUPBY(GET("major")) | AVERAGE(GET("gpa"))
-{ "Computer Science": 2.998, "Statistics": 3.003, ... }
-
-$ ./streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'</code></pre>
-      </section>
-
-      <section id="edge-cases">
-        <h2>Edge Case Handling</h2>
-        <p class="muted">The JSON-parsing edge cases from Sprint 1 (below) still apply unchanged. The query engine added a second layer of edge cases on top — several of them found by actually trying to break the five operations, not anticipated up front.</p>
-        <table>
-          <thead>
-            <tr><th>Case</th><th>Behavior</th></tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>File not found / can't open</td>
-              <td>Throws <code>std::runtime_error</code> with a suggestion (check path, permissions, working directory).</td>
-            </tr>
-            <tr>
-              <td>Unterminated string / bad token in scanner</td>
-              <td><code>Scanner::scan()</code> throws <code>runtime_error</code> — "Unterminated string" regardless of file type; otherwise "Invalid JSON input at line N" for <code>.json</code> or "Invalid JSONL input" for <code>.jsonl</code>.</td>
-            </tr>
-            <tr>
-              <td>Illegal escape sequence / raw control character in a string</td>
-              <td>Scanner rejects both explicitly rather than passing them through — <code>\uXXXX</code> is validated for length, and bytes below <code>0x20</code> require an escape.</td>
-            </tr>
-            <tr>
-              <td><code>\uXXXX</code> above the Basic Multilingual Plane (emoji)</td>
-              <td>A high/low surrogate pair is combined into the real code point and UTF-8-encoded correctly. Comparing an emoji field with <code>FILTER(... == "&#x1F349;")</code> works; a bare <code>GET</code> on that field still prints the escaped form rather than the rendered character.</td>
-            </tr>
-            <tr>
-              <td><code>FILTER</code> where some records are missing the field</td>
-              <td>Those records just don't match — the query still returns a result instead of erroring on the first gap.</td>
-            </tr>
-            <tr>
-              <td><code>SORT</code> where a record is missing the sort field</td>
-              <td>Deliberately stricter than <code>FILTER</code>: there's no sane position for a record with no value, so this is a clean error instead of a silent skip.</td>
-            </tr>
-            <tr>
-              <td><code>SORT</code> comparing incompatible types (string vs. number)</td>
-              <td>Clean <code>Error: cannot compare...</code> — this used to be an uncaught exception that crashed the whole program; found and fixed this sprint.</td>
-            </tr>
-            <tr>
-              <td><code>AVERAGE</code> on a non-numeric field, or on zero usable values</td>
-              <td>Both are clean errors now ("field is not a number", "no numeric values found") — also previously an uncaught crash.</td>
-            </tr>
-            <tr>
-              <td><code>GROUPBY</code> where the key field is itself an array/object</td>
-              <td>That one record is excluded from every group instead of crashing the whole query.</td>
-            </tr>
-            <tr>
-              <td>Malformed query syntax</td>
-              <td><code>QueryParser::parse()</code>'s exception is now caught by the CLI, printing a readable error and returning to the menu instead of exiting the program.</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section id="query-language">
-        <h2>Query Language</h2>
-        <p class="muted">All six operations below are implemented and pass a live regression suite (see <a href="#build-system">Build System</a>). Every result on this page was run against the actual binary — not hand-written.</p>
-
-        <div class="feature">
-          <h3>Get <span class="status done">done</span></h3>
-          <p>Retrieve the value at a given path. Multiple arguments walk into nested objects/arrays.</p>
-          <dl>
-            <dt>Query</dt><dd><code>GET("student","name")</code></dd>
-            <dt>JSON</dt><dd><code>{"student":{"name":"Ryan","scores":[90,85]}}</code></dd>
-            <dt>Result</dt><dd><code>"Ryan"</code></dd>
-          </dl>
-        </div>
-
-        <div class="feature">
-          <h3>Filter &amp; Comparison <span class="status done">done</span></h3>
-          <p>Keep only the records matching a boolean expression — comparisons combine with <code>AND</code> / <code>OR</code>, not just one condition.</p>
-          <dl>
-            <dt>Query</dt><dd><code>FILTER(GET("a") &gt; 1)</code></dd>
-            <dt>JSON</dt><dd><code>[{"a": 1, "b": 2}, {"a": 2, "b": 2}]</code></dd>
-            <dt>Result</dt><dd><code>[{"a": 2, "b": 2}]</code></dd>
-            <dt>Also works</dt><dd><code>FILTER(GET("major") == "CS" AND GET("gpa") &gt; 3.5)</code></dd>
-          </dl>
-        </div>
-
-        <div class="feature">
-          <h3>Sort <span class="status done">done</span></h3>
-          <p>Order an array of records by a field, ascending or descending.</p>
-          <dl>
-            <dt>Query</dt><dd><code>SORT(GET("a"), ASC)</code></dd>
-            <dt>JSON</dt><dd><code>[{"a": 1, "b": 2}, {"a": 0, "b": 3}]</code></dd>
-            <dt>Result</dt><dd><code>[{"a": 0, "b": 3}, {"a": 1, "b": 2}]</code></dd>
-          </dl>
-        </div>
-
-        <div class="feature">
-          <h3>Limit <span class="status done">done</span></h3>
-          <p>Return only the first N records.</p>
-          <dl>
-            <dt>Query</dt><dd><code>LIMIT(1)</code></dd>
-            <dt>JSON</dt><dd><code>[{"a": 1, "b": 2}, {"a": 0, "b": 3}]</code></dd>
-            <dt>Result</dt><dd><code>[{"a": 1, "b": 2}]</code></dd>
-          </dl>
-        </div>
-
-        <div class="feature">
-          <h3>GroupBy <span class="status done">done</span></h3>
-          <p>Bucket records by the value of a field.</p>
-          <dl>
-            <dt>Query</dt><dd><code>GROUPBY(GET("a"))</code></dd>
-            <dt>JSON</dt><dd><code>[{"a": 1, "b": 2}, {"a": 0, "b": 3}, {"a": 1, "b": 5}]</code></dd>
-            <dt>Result</dt><dd><code>{"1": [{"a": 1, "b": 2}, {"a": 1, "b": 5}], "0": [{"a": 0, "b": 3}]}</code></dd>
-          </dl>
-        </div>
-
-        <div class="feature">
-          <h3>Average <span class="status done">done</span></h3>
-          <p>Compute the mean of a field. Works standalone (one number) or right after <code>GROUPBY</code> (one number per group, same code path).</p>
-          <dl>
-            <dt>Query</dt><dd><code>GROUPBY(GET("city")) | AVERAGE(GET("price"))</code></dd>
-            <dt>JSON</dt><dd><code>[{"id":1,"city":"Riverside","price":450000}, {"id":2,"city":"Riverside","price":480000}, {"id":3,"city":"Los Angeles","price":800000}, {"id":4,"city":"Riverside","price":460000}]</code></dd>
-            <dt>Result</dt><dd><code>{"Riverside": 463333.33, "Los Angeles": 800000}</code></dd>
-          </dl>
-        </div>
-
-        <div class="feature">
-          <h3>Piping, chained without limit <span class="status done">done</span></h3>
-          <p><code>|</code> threads one stage's output into the next. There's no fixed cap on how many stages can chain — tested up to 50 in a row with no issue.</p>
-          <dl>
-            <dt>Query</dt><dd><code>FILTER(GET("gpa") &gt; 3.9) | SORT(GET("gpa"), DESC) | LIMIT(3)</code></dd>
-            <dt>Behavior</dt><dd>Each stage sees the <em>previous</em> stage's result, not the original document — a stage checks whether it got the shape it needs (array vs. object) and errors cleanly if not.</dd>
-          </dl>
-        </div>
+        <p class="muted"><code>main.cpp</code> is menu-driven: <code>doUpload()</code> then <code>doSearch()</code> loop over <code>promptLine()</code>, so a file is read once and queried as many times as you want. <code>promptLine()</code> uses GNU Readline for arrow-key history and in-line editing when it's available (<code>STREAMLINE_READLINE</code>, detected by <code>CMakeLists.txt</code>) and falls back to plain <code>getline</code> otherwise. The direct <code>argv</code> form (<code>streamline file.json "query"</code>) still works too, for scripting. See <a href="#tutorial">Tutorial</a> for a full transcript.</p>
       </section>
 
       <section id="algorithms">
-        <h2>Algorithms &amp; Optimizations</h2>
-
-        <h3>Recursive-descent parsing</h3>
+        <h2>Algorithms</h2>
         <p class="muted">
-          <code>Parser::parse()</code> mirrors the JSON grammar directly: one function,
-          one <code>switch</code> on the current token type, recursing into itself for
-          nested object/array values. No lookahead beyond a single token is needed.
+          Pseudocode for the three algorithms that do most of the work: parsing a JSON document,
+          parsing a query string, and evaluating a parsed query against the loaded document.
+          Optimizations applied on top of these are covered separately, in
+          <a href="#optimizations">Optimizations &amp; Refactoring</a>.
         </p>
 
-        <h3>Lazy, single-token scanning</h3>
+        <h3>JSON / JSONL parsing</h3>
         <p class="muted">
-          <code>Scanner::scan()</code> is pulled one token at a time by the parser instead
-          of tokenizing the whole input into a vector up front. Memory used by tokenization
-          stays <code>O(1)</code> regardless of input size — it doesn't grow with how much
-          of the file has been scanned.
+          Recursive descent, pulled one token at a time from <code>FileScanner::scan()</code> —
+          no lookahead beyond the current token. <code>.jsonl</code> repeats the same
+          <code>parseObject()</code> per line instead of parsing one document for the whole file.
+        </p>
+        <pre><code>function parse():
+    if fileType == JSON:
+        if currentToken == END: return null
+        value ← parseObject()
+        if currentToken != END: error "trailing content"
+        return value
+    else:  # JSONL
+        records ← []
+        while currentToken != END:
+            while currentToken != OBJ_END and currentToken != END:
+                records.append(parseObject())
+            advance()             # consume the newline/OBJ_END marker
+        return Array(records)
+
+function parseObject():
+    switch currentToken.type:
+        case LBRACE:
+            pairs ← []
+            advance()
+            while currentToken != RBRACE:
+                key ← currentToken.value        # must be STRING
+                advance(); expect(COLON); advance()
+                pairs.append((key, parseObject()))    # ← recursion
+                if currentToken == COMMA: advance()
+            advance()
+            return Object(pairs)
+        case LBRACKET:
+            items ← []
+            advance()
+            while currentToken != RBRACKET:
+                items.append(parseObject())           # ← recursion
+                if currentToken == COMMA: advance()
+            advance()
+            return Array(items)
+        case STRING:  advance(); return String(token.value)
+        case NUMBER:  advance(); return Number(parseFloat(token.value))
+        case BOOLEAN: advance(); return Boolean(token.value == "true")
+        case NULL:    advance(); return Null
+        default: error "unexpected token"</code></pre>
+
+        <h3>Query parsing</h3>
+        <p class="muted">
+          Also recursive descent, an entirely separate grammar from the one above. Boolean
+          expressions inside <code>FILTER(...)</code> use precedence climbing — <code>OR</code>
+          binds loosest, then <code>AND</code>, then a comparison — so
+          <code>a == 1 AND b == 2 OR c == 3</code> groups as <code>(a==1 AND b==2) OR (c==3)</code>.
+        </p>
+        <pre><code>function parsePipeline():
+    functions ← []
+    while currentToken != END:
+        name ← currentToken.value; advance()
+        functions.append(parseStage(name))   # GET / FILTER / SORT / LIMIT / GROUPBY / AVERAGE
+        if currentToken == PIPE: advance()
+        else if currentToken != END: error "expected '|' or end"
+    return functions
+
+function parseExpression(): return parseOr()
+
+function parseOr():
+    left ← parseAnd()
+    while currentToken == OR:
+        advance(); right ← parseAnd()
+        left ← BinaryNode(left, OR, right)
+    return left
+
+function parseAnd():
+    left ← parseComparison()
+    while currentToken == AND:
+        advance(); right ← parseComparison()
+        left ← BinaryNode(left, AND, right)
+    return left
+
+function parseComparison():
+    left ← parseOperand()             # literal, GET(...), or AVERAGE(...)
+    if currentToken in {==, !=, &lt;, &lt;=, &gt;, &gt;=}:
+        op ← currentToken.type; advance()
+        right ← parseOperand()
+        left ← BinaryNode(left, op, right)
+    return left</code></pre>
+
+        <h3>Query evaluation</h3>
+        <p class="muted">
+          <code>excecuteQuery()</code> walks the parsed <code>QueryFunction</code> list in
+          order, threading one value — <code>current</code> — through every stage.
+        </p>
+        <pre><code>function excecuteQuery(session, query):
+    functions ← QueryParser(query).parse()
+    current ← session.file
+
+    for stage in functions:
+        match stage:
+            case GET(path):        current ← lookup(current, path)
+            case FILTER(cond):     current ← [r for r in current if evaluate(cond, r) == true]
+            case SORT(path, dir):  current ← sort(current, key = r ↦ lookup(r, path), dir)
+            case LIMIT(n):         current ← current[0 : n]
+            case GROUPBY(path):    current ← group by lookup(r, path) for r in current
+            case AVERAGE(path):    current ← mean of lookup(r, path) over current
+                                    # if current is an object (post-GROUPBY), averages within each group instead
+        if current is an error: return formatted error   # stop the pipeline early
+
+    return format(current)
+
+function evaluate(node, record):        # expression-tree evaluation, used by FILTER
+    match node:
+        case Literal(v):     return v
+        case Get(path):      return lookup(record, path)
+        case Average(path):  return mean of lookup(e, path) over record   # record itself must be an array
+        case Binary(op, l, r):
+            if op in {AND, OR}: return shortCircuit(op, evaluate(l, record), evaluate(r, record))
+            return compare(evaluate(l, record), op, evaluate(r, record))</code></pre>
+        <p class="muted">
+          Every stage checks the shape it actually received (array vs. object) before touching
+          it, so a query that chains onto the wrong stage fails with a readable error instead of
+          misreading the wrong type — see <a href="#testing">Testing</a> for how that's exercised.
+        </p>
+      </section>
+
+      <section id="optimizations">
+        <h2>Optimizations &amp; Refactoring</h2>
+        <p class="muted">
+          What's been tried against the parser and query engine — applied and reverted alike —
+          roughly in the order a query touches them. Before/after numbers are included where we
+          have them; <a href="#references">References</a> below cites the theory.
         </p>
 
-        <h3>Zero-copy tokens</h3>
+        <h3>Keyword-table scanning <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Jules</span></h3>
         <p class="muted">
-          <code>Token::value</code> is a <code>string_view</code> into the original buffer
-          — scanning a string or number allocates nothing. A copy only happens once, when
-          the parser commits to building a string-valued <code>JSONValue</code> (or an
-          object key) and needs an owned <code>std::string</code>.
+          Both scanners used to recognize fixed words with one hand-written character chain per
+          word — <code>*curr=='t' &amp;&amp; *(curr+1)=='r' &amp;&amp; ...</code> for
+          <code>true</code>, a separate chain for <code>false</code>, another for
+          <code>null</code>, and (in the query scanner) one per keyword — <code>FILTER</code>,
+          <code>GROUPBY</code>, <code>AVERAGE</code>, <code>SORT</code>, <code>LIMIT</code>,
+          <code>GET</code>, <code>ASC</code>, <code>DESC</code>, <code>AND</code>, <code>OR</code>.
+          Both scanners now scan the identifier once and check it against a static
+          <code>unordered_map&lt;string_view, TokenType&gt;</code> instead — one lookup instead
+          of up to ten sequential character-by-character comparisons in the worst case.
         </p>
 
-        <h3>Value-typed tree, moved not copied</h3>
+        <h3><code>from_chars</code> instead of <code>stod</code>/<code>stoi</code> <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Jules</span></h3>
         <p class="muted">
-          <code>JSONValue</code> is a value type (a tagged <code>variant</code>), and
-          sub-trees live directly inside their parent's <code>vector</code>
-          (<code>ArrayValue</code> / <code>ObjectValue</code>). They're still
-          <code>std::move</code>d into place as they're built rather than copied, so
-          building the tree doesn't duplicate data — it just no longer requires a heap
-          allocation (<code>unique_ptr</code>) per node the way the earlier polymorphic
-          design did.
+          Number parsing — in the JSON parser's <code>Number</code> case, the query parser's
+          number literals, and <code>LIMIT</code>'s count — used to build a temporary
+          <code>std::string</code> from a <code>string_view</code> just to hand it to
+          <code>stod</code>/<code>stoi</code>, which then does a locale-aware, exception-capable
+          parse internally. All three now call <code>std::from_chars</code>
+          (<code>&lt;charconv&gt;</code>) directly on the <code>string_view</code>'s pointers —
+          no allocation, no locale lookup, no exceptions. The JSON-parser site is the highest
+          value of the three, since it runs once per numeric field across the entire document
+          on every upload. <code>get()</code>'s array-index parsing still goes through
+          <code>stoi</code> on a temporary string — see <a href="#limitations">Limitations</a>.
         </p>
 
-        <h3>Per-line parsing, whole-file buffering</h3>
+        <h3>Move semantics on upload <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Jules</span></h3>
         <p class="muted">
-          <code>readFile()</code> now reads the entire file into an in-memory
-          <code>std::string</code> (<code>ostringstream buffer; buffer &lt;&lt; file.rdbuf();</code>)
-          before <code>readJsonlFile()</code> / <code>readJsonFile()</code> parse it —
-          <code>.jsonl</code> is still parsed one line at a time via a fresh
-          <code>Parser</code> per line, but that line comes out of the buffered string
-          rather than being streamed with <code>std::getline</code> straight off the file
-          handle.
+          <code>Session::initialize(JSONValue v, string n)</code> used to do <code>file = v;
+          name = n;</code> — a copy-assignment of both arguments even though the function had
+          just received its own copies and would never use them again. It's now
+          <code>file = move(v); name = move(n);</code>, and the call site passes
+          <code>uploadFile</code>'s parsed document in with <code>move(temp)</code> as well —
+          removing an extra full deep-copy of the parsed document on every file upload.
         </p>
 
-        <h3>Sort-key precomputation (Schwartzian transform)</h3>
+        <h3>Bare-scalar trailing content, rejected <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Jules</span></h3>
         <p class="muted">
-          A naive <code>SORT</code> comparator calls <code>GET</code> on both sides of every
-          comparison — for <code>n</code> records that's <code>O(n log n)</code> field
-          lookups. <code>SORT</code> instead looks up each record's key exactly once before
-          sorting, into a <code>vector&lt;pair&lt;const JSONValue*, size_t&gt;&gt;</code>,
-          and sorts that — <code>O(n)</code> lookups, with the comparator itself doing nothing
-          but comparing two already-known values.
-        </p>
-
-        <h3>Hash-map grouping</h3>
-        <p class="muted">
-          A naive <code>GROUPBY</code> finds-or-creates a record's bucket by scanning every
-          group seen so far — <code>O(records &times; groups)</code> in the worst case.
-          <code>GROUPBY</code> instead keeps an <code>unordered_map&lt;string, size_t&gt;</code>
-          from group key to bucket index, so placing each record is <code>O(1)</code> average
-          regardless of how many distinct groups exist.
-        </p>
-
-        <h3>Hand-rolled number validation <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Jules</span></h3>
-        <p class="muted">
-          <code>Scanner::scan()</code> used to validate every number token with
-          <code>std::regex_match</code> against a fixed pattern — correct, but a backtracking
-          regex engine plus a throwaway <code>std::string</code> allocation on <em>every single
-          number</em> in the file, which dominates on number-heavy datasets. It's now a direct
-          character-by-character walk of the same grammar
-          (<code>-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?</code>) over the existing
-          <code>string_view</code> — same accepted language, zero allocation, no backtracking.
+          A top-level JSON value that wasn't wrapped in an object or array — a bare
+          <code>1</code>, or a scalar followed by junk after it — used to parse successfully and
+          silently ignore whatever came after the first value. <code>FileParser::parse()</code>'s
+          <code>JSON</code> branch now checks that the token stream is at <code>END</code>
+          immediately after <code>parseObject()</code> returns, and rejects it with
+          "trailing content" otherwise. Correctness fix more than a performance one, but it
+          closes a gap that had been open since the very first sprint.
         </p>
 
         <h3>Fast-path key comparison <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Javier</span></h3>
@@ -983,7 +1124,26 @@ $ ./streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'</code
           This is a classic <strong>fast-path / slow-path</strong> optimization: worst-case
           complexity is unchanged, but the expected cost on real data (mostly exact or clearly
           different keys) drops from two allocating O(n) transforms to one allocation-free
-          comparison. See <code>keysEqual()</code> in <code>file-reader.cpp</code>.
+          comparison. See <code>keysEqual()</code> in <code>query-engine.cpp</code>.
+        </p>
+
+        <h3>Sort-key precomputation (Schwartzian transform) <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Javier</span></h3>
+        <p class="muted">
+          A naive <code>SORT</code> comparator calls <code>GET</code> on both sides of every
+          comparison — for <code>n</code> records that's <code>O(n log n)</code> field
+          lookups. <code>SORT</code> instead looks up each record's key exactly once before
+          sorting, into a <code>vector&lt;pair&lt;const JSONValue*, size_t&gt;&gt;</code>,
+          and sorts that — <code>O(n)</code> lookups, with the comparator itself doing nothing
+          but comparing two already-known values.
+        </p>
+
+        <h3>Hash-map grouping <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Javier</span></h3>
+        <p class="muted">
+          A naive <code>GROUPBY</code> finds-or-creates a record's bucket by scanning every
+          group seen so far — <code>O(records &times; groups)</code> in the worst case.
+          <code>GROUPBY</code> instead keeps an <code>unordered_map&lt;string, size_t&gt;</code>
+          from group key to bucket index, so placing each record is <code>O(1)</code> average
+          regardless of how many distinct groups exist.
         </p>
 
         <h3>Parallel reduction for <code>AVERAGE</code> <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Javier</span></h3>
@@ -1048,24 +1208,41 @@ $ ./streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'</code
           arithmetic would.
         </p>
 
+        <h3>Number validation — reverted, worth revisiting <span class="status planned">revisit</span></h3>
+        <p class="muted">
+          A hand-rolled, allocation-free digit-by-digit validator briefly replaced
+          <code>std::regex_match</code> for number tokens in both scanners (the same idea as
+          the keyword-table change above, applied to numbers instead of words). It was rolled
+          back to <code>std::regex_search</code> with <code>match_continuous</code> while a
+          scanner issue was chased down — the hand-rolled version is still in both files,
+          commented out, rather than deleted. Current state: numbers go through
+          <code>&lt;regex&gt;</code> again, which is correct but pays a backtracking-engine
+          traversal per number. Worth re-landing before final benchmarking.
+        </p>
+
         <div class="callout">
-          <strong>Not yet optimized:</strong> <code>FILTER</code> / <code>GROUPBY</code> still
-          deep-copy every matching <code>JSONValue</code> into the result set, rather than
-          carrying indices/pointers until the very end. <code>excecuteQuery()</code> also
-          deep-copies the <em>entire</em> uploaded document into <code>current</code> at the
-          start of every query (<code>JSONValue current = session.file;</code>), even for a
-          query that only needs one field — a candidate to revisit if large-document queries
-          show up slow. <code>get()</code>'s object lookup is still a linear scan (now
-          allocation-free in the common case, but still <code>O(object width)</code>, not
-          <code>O(1)</code>) — fine at typical object sizes.
+          <strong>Not yet optimized:</strong> <code>excecuteQuery()</code> still deep-copies the
+          <em>entire</em> uploaded document into <code>current</code> at the start of every
+          query (<code>JSONValue current = session.file;</code>), even for a query that only
+          needs one field. <code>FILTER</code> / <code>SORT</code> / <code>GROUPBY</code> still
+          copy every matching/kept <code>JSONValue</code> into a new array at each stage,
+          instead of carrying indices until the very end. <code>groupKeyText()</code> and
+          <code>formatValue()</code> still build numbers through <code>ostringstream</code>
+          rather than <code>to_chars</code>, and <code>formatValue()</code> still returns a new
+          <code>string</code> per nesting level instead of appending into one shared buffer.
+          <code>get()</code>'s object lookup is still a linear scan (allocation-free in the
+          common case, but still <code>O(object width)</code>, not <code>O(1)</code>) — fine at
+          typical object sizes. Only <code>AVERAGE</code> is parallelized;
+          <code>FILTER</code> and <code>GROUPBY</code> are single-threaded and would fit the
+          same map/partition/merge shape. Full detail in <a href="#limitations">Limitations</a>.
         </div>
       </section>
 
       <section id="references">
         <h2>References &amp; Further Reading</h2>
         <p class="muted">
-          Background reading behind the techniques in <a href="#algorithms">Algorithms &amp;
-          Optimizations</a> above — the work-depth/PRAM model, Brent's theorem, and parallel
+          Background reading behind the techniques in <a href="#optimizations">Optimizations
+          &amp; Refactoring</a> above — the work-depth/PRAM model, Brent's theorem, and parallel
           reduction in particular. Fill in with whatever's actually being cited in the
           presentation.
         </p>
@@ -1098,25 +1275,170 @@ $ ./streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'</code
         </ul>
       </section>
 
+      <section id="testing">
+        <h2>Testing</h2>
+        <p class="muted">
+          <code>tests/correctness/tests.cpp</code> is one self-contained regression suite,
+          linked against the exact same <code>CORE_SOURCES</code> the CLI and benchmark use —
+          not a separate copy of the engine.
+        </p>
+
+        <h3>Design</h3>
+        <p class="muted">Ten groups, run in order from <code>main()</code>, each covering a different layer:</p>
+        <table>
+          <thead>
+            <tr><th>Group</th><th>Covers</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>testScanner</code></td><td>Tokenization — braces, punctuation, strings, escapes</td></tr>
+            <tr><td><code>testPrimitives</code></td><td>Bare <code>true</code>/<code>false</code>/<code>null</code>/number/string documents</td></tr>
+            <tr><td><code>testNested</code></td><td>Nested objects/arrays, multi-level <code>GET</code> paths</td></tr>
+            <tr><td><code>testWhitespace</code></td><td>Whitespace and formatting tolerance</td></tr>
+            <tr><td><code>testInvalid</code></td><td>Malformed input — rejected with a clean error, not a crash</td></tr>
+            <tr><td><code>testStrings</code></td><td>Escape sequences, <code>\uXXXX</code>, surrogate pairs</td></tr>
+            <tr><td><code>testLookup</code></td><td><code>get()</code> path resolution against <code>tests/data</code> fixtures</td></tr>
+            <tr><td><code>testFiles</code></td><td><code>.json</code>/<code>.jsonl</code>/mixed-case-extension uploads, missing-file errors</td></tr>
+            <tr><td><code>testQueries</code></td><td>End-to-end pipeline queries — <code>GET</code>/<code>FILTER</code>/<code>SORT</code>/<code>LIMIT</code>/<code>GROUPBY</code>/<code>AVERAGE</code>, chained</td></tr>
+            <tr><td><code>testVersion</code></td><td>Built binary's version ID matches what the suite expects</td></tr>
+          </tbody>
+        </table>
+        <p class="muted">
+          Each check is a plain equality against a hand-computed expected value — no mocking,
+          no fixtures beyond the small JSON files in <code>tests/data</code>. A shared
+          <code>passed</code>/<code>failed</code> counter is printed as a summary at the end.
+        </p>
+
+        <h3>Running it</h3>
+        <pre><code>cmake -B build
+cmake --build build --target tests
+./build/tests                    # reads tests/data relative to the repo root
+./build/tests path/to/tests/data # or point it at the data directory explicitly</code></pre>
+
+        <h3>Current results</h3>
+        <p class="muted">
+          As of this pass on <code>main</code>: <strong>109 passed &middot; 1 failed &middot;
+          110 total.</strong> The one failure is <code>testVersion</code> — <code>version.cpp</code>
+          currently reports <code>week4-v1</code>, but the suite's expected value hasn't been
+          bumped to match. That's exactly the process step the <a href="#benchmarking">Benchmarking</a>
+          workflow calls out (update the version ID <em>and</em> its expected value together) —
+          not a functional regression in the parser or query engine.
+        </p>
+
+        <h3>Limitations of the current test design</h3>
+        <ul class="muted">
+          <li>No test exercises <a href="#feat-filter-average">Filter by Average</a> (<code>AVERAGE</code> used as an expression operand inside <code>FILTER</code>) — only the standalone <code>AVERAGE</code> stage is covered.</li>
+          <li>No dedicated test for the parallel <code>AVERAGE</code> reduction's thread-count threshold, or for <code>GROUPBY</code>/<code>FILTER</code> on inputs large enough to matter for the optimizations in <a href="#optimizations">Optimizations &amp; Refactoring</a>.</li>
+          <li>No fuzz/property-based testing — every fixture is a small, hand-written file.</li>
+        </ul>
+        <div class="todo">
+          <span class="tag">todo</span>Add anything else missing here before the final submission.
+        </div>
+      </section>
+
+      <section id="benchmarking">
+        <h2>Benchmarking</h2>
+        <p>
+          Every performance-relevant build gets a version ID —
+          <code>week&lt;N&gt;-v&lt;N&gt;</code> — so a measured optimization can be tied to the
+          exact code that produced it. This is separate from git: git tracks source history,
+          branches, and lets you restore old code; the version ID exists specifically so a
+          benchmark result can be labeled and compared later without checking out an old commit
+          and rebuilding it. <code>./build/streamline --version</code> prints the version baked
+          into the binary you're currently running.
+        </p>
+
+        <h3>Version ID scheme</h3>
+        <ul>
+          <li><code>week&lt;N&gt;-v1</code> — that week's baseline.</li>
+          <li><code>week&lt;N&gt;-v2</code>, <code>week&lt;N&gt;-v3</code>, … — each optimization measured
+            against that baseline gets its own ID.</li>
+          <li>A new baseline starts each week (currently <code>week4-v1</code>).</li>
+        </ul>
+
+        <h3>Workflow before measuring an optimization</h3>
+        <ol>
+          <li>Update the version ID in <code>version.cpp</code> <em>and</em> its expected value in
+            <code>tests/correctness/tests.cpp</code> — see <a href="#testing">Testing</a> for what happens when this is skipped.</li>
+          <li>Build the program in Release mode (now hardcoded in <code>CMakeLists.txt</code> — see <a href="#build-system">Build System</a>).</li>
+          <li>Run the correctness tests — a faster wrong answer isn't a win.</li>
+          <li>Run the performance tests.</li>
+          <li>Save the version ID alongside the performance results.</li>
+        </ol>
+        <p class="muted">
+          A version ID is never reused once its results are saved — every code change being
+          measured gets a fresh one, so the performance log can always point at exactly which
+          version a number came from.
+        </p>
+
+        <h3>The benchmark itself</h3>
+        <p class="muted">
+          <code>tests/performance/benchmark.cpp</code> runs against
+          <code>json/students.json</code> — 85,032 records, ~50&nbsp;MB — through
+          <code>uploadFile()</code>, <code>Session</code>, and the real query pipeline
+          (<code>AVERAGE(GET("gpa"))</code>), so it measures the same code path the CLI
+          actually uses, not a synthetic stand-in.
+        </p>
+        <pre><code>cmake -S . -B build
+cmake --build build
+./build/tests tests/data     # correctness first
+./build/benchmark             # then performance</code></pre>
+        <p class="muted">
+          One warm-up run followed by five measured runs; the last row is the median total
+          time. Every run also appends to <code>benchmarks/results/&lt;machine&gt;.csv</code>
+          (version, timestamp, machine/OS/compiler, dataset, query, record count, and load /
+          query / total timings), so results across versions <em>and</em> across teammates'
+          machines can be diffed or charted directly. Only directly compare runs made on the
+          same machine, build type, and dataset — cross-machine numbers in the same CSV are
+          useful for shape/trend, not head-to-head comparison.
+        </p>
+
+        <div class="callout">
+          <strong>What we've found using this so far:</strong> parsing
+          <code>students.json</code> takes ~550&ndash;580&nbsp;ms regardless of which query
+          engine optimizations are in place — the JSON parser itself wasn't the bottleneck.
+          The real gap showed up in query execution: a <code>FILTER</code> matching nearly
+          every record and printing the full result added ~520&nbsp;ms on top of parsing,
+          versus ~40&nbsp;ms for one matching nothing. <code>AVERAGE</code> told the same story
+          from a different angle — see <a href="#optimizations">Optimizations &amp; Refactoring</a>
+          for the two optimizations that came out of chasing it and the before/after numbers.
+        </div>
+
+        <div class="todo">
+          <span class="tag">todo</span>
+          Run the assignment's specific benchmark: parsing/querying across a size ladder from
+          20&nbsp;MB to 200&nbsp;MB, with and without the current optimizations, and report the
+          comparison here. The 85k-record/~50&nbsp;MB run above is a single fixed size, not yet
+          the multi-size comparison this needs.
+        </div>
+      </section>
+
+      <section id="limitations">
+        <h2>Limitations</h2>
+        <p class="muted">What the current implementation doesn't do, or doesn't do well yet — as of the state on <code>main</code> referenced throughout this page.</p>
+        <ul>
+          <li><strong>Every query copies the whole document up front.</strong> <code>excecuteQuery()</code> deep-copies the entire uploaded <code>JSONValue</code> into <code>current</code> before running any stage, even a single-field <code>GET</code>. On a very large document this dominates small-query latency.</li>
+          <li><strong><code>FILTER</code>/<code>SORT</code>/<code>GROUPBY</code> copy every kept record.</strong> Each stage builds a fresh array of full <code>JSONValue</code> copies rather than carrying indices/pointers and materializing once at the end.</li>
+          <li><strong>Only <code>AVERAGE</code> is parallelized.</strong> <code>FILTER</code> and <code>GROUPBY</code> run single-threaded even on inputs large enough that the same map/partition/merge approach would help.</li>
+          <li><strong>Number validation currently goes through <code>&lt;regex&gt;</code></strong> in both scanners (see <a href="#optimizations">Optimizations &amp; Refactoring</a>) — a faster hand-rolled version exists in the source, commented out, but isn't wired back in.</li>
+          <li><strong><code>get()</code>'s field lookup is a linear scan</strong> over an object's keys — <code>O(object width)</code>, not <code>O(1)</code>. Fine at the object widths in our test/benchmark data; would need revisiting for very wide objects.</li>
+          <li><strong>Output only goes to <code>stdout</code>.</strong> There's no flag to write a query's result to a file — piping/redirecting the shell's own output is the only option today.</li>
+          <li><strong><a href="#feat-filter-average">Filter by Average</a> only works one level of nesting deep.</strong> <code>FILTER(AVERAGE(...) &gt; x)</code> requires the value being tested per-record to itself be a numeric array (or an array of objects, for the <code>GET(...)</code> form) — against a flat array of plain records it silently matches nothing rather than erroring.</li>
+        </ul>
+        <div class="todo">
+          <span class="tag">todo</span>Add any other known gaps or out-of-scope features here before final submission.
+        </div>
+      </section>
+
       <section id="build-system">
         <h2>Build System</h2>
         <p>
-          Sprint 1 was built with one <code>g++ ...</code> command per person, copy-pasted
-          from a comment at the top of each driver file (<code>demo.cpp</code>,
-          <code>test_lookup.cpp</code>). That already went stale once — a leftover
-          reference to the pre-rename <code>jsonl-reader.cpp</code> broke
-          <code>test_lookup.cpp</code>'s documented build command after the file became
-          <code>file-reader.cpp</code>, and nothing caught it until someone actually tried
-          to build it. As of Aug 2, the whole project builds through one root-level
+          The whole project builds through one root-level
           <a href="https://github.com/UCR-CS-179K-Summer-2026/project1/blob/main/CMakeLists.txt"><code>CMakeLists.txt</code></a>
-          instead.
+          instead of per-person <code>g++</code> commands copy-pasted from comments in driver
+          files — see <a href="#timeline">Timeline</a> for how that came about.
         </p>
 
         <h3>Why CMake instead of hand-typed g++ commands</h3>
-        <p class="muted">
-          Four reasons this was worth adopting mid-sprint rather than staying with manual
-          commands:
-        </p>
         <table>
           <thead>
             <tr><th>Manual <code>g++</code></th><th>CMake</th></tr>
@@ -1141,7 +1463,7 @@ $ ./streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'</code
             <tr>
               <td>No optimization flag in any documented command — compiles at the
                 default, <code>-O0</code></td>
-              <td>Defaults to a <code>Release</code> build — see below</td>
+              <td><code>CMAKE_BUILD_TYPE</code> is hardcoded to <code>Release</code> — see below</td>
             </tr>
           </tbody>
         </table>
@@ -1149,12 +1471,15 @@ $ ./streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'</code
         <h3>Layout &amp; usage</h3>
         <p class="muted">
           <code>CMakeLists.txt</code> lives at the repo root and builds three targets from
-          <code>week3/</code> — <code>streamline</code> is the CLI, <code>tests</code> is the
-          regression suite, and <code>benchmark</code> is the performance harness referenced in
-          <a href="#algorithms">Algorithms &amp; Optimizations</a>. All three link
-          <code>Threads::Threads</code> (via <code>find_package(Threads)</code>) now that
+          <code>week4/</code> — <code>streamline</code> is the CLI, <code>tests</code> is the
+          regression suite (<a href="#testing">Testing</a>), and <code>benchmark</code> is the
+          performance harness (<a href="#benchmarking">Benchmarking</a>). All three link
+          <code>Threads::Threads</code> (via <code>find_package(Threads)</code>) since
           <code>AVERAGE</code>'s reduction spins up <code>std::thread</code>s — needed for
           portable <code>-pthread</code> linking on Linux/GCC, not just macOS.
+          <code>CMAKE_BUILD_TYPE</code> is forced to <code>Release</code> unconditionally, which
+          means a debugger can't step through the binary CMake produces — a deliberate tradeoff
+          so nobody accidentally benchmarks a debug build.
         </p>
         <pre><code>cmake -B build           # configure once
 cmake --build build       # (re)build — only recompiles what changed
@@ -1163,87 +1488,59 @@ cmake --build build       # (re)build — only recompiles what changed
 ./build/benchmark           # performance harness</code></pre>
         <p class="muted">
           <code>streamline</code>, <code>tests</code>, and <code>benchmark</code> all compile
-          the same <code>CORE_SOURCES</code> — <code>scanner.cpp</code>, <code>parser.cpp</code>,
-          <code>file-reader.cpp</code>, <code>version.cpp</code>, <code>query-parser.cpp</code>
-          — so the test suite and the benchmark are both exercising the exact same engine the
-          CLI runs, not a separate copy.
+          the same <code>CORE_SOURCES</code> — <code>file-scanner.cpp</code>,
+          <code>file-parser.cpp</code>, <code>query-engine.cpp</code>, <code>version.cpp</code>,
+          <code>query-scanner.cpp</code>, <code>query-parser.cpp</code> — so the test suite and
+          the benchmark are both exercising the exact same engine the CLI runs, not a separate
+          copy.
         </p>
       </section>
 
-      <section id="versioning">
-        <h2>Versioning &amp; Benchmarking</h2>
-        <p>
-          Every performance-relevant build gets a version ID —
-          <code>week&lt;N&gt;-v&lt;N&gt;</code> — so a measured optimization can be tied to the
-          exact code that produced it. This is separate from git: git tracks source history,
-          branches, and lets you restore old code; the version ID exists specifically so a
-          benchmark result can be labeled and compared later without having to check out an
-          old commit and rebuild it. <code>./build/streamline --version</code> prints the
-          version baked into the binary you're currently running.
-        </p>
-
-        <h3>Version ID scheme</h3>
-        <ul>
-          <li><code>week2-v1</code> — the Week 2 baseline.</li>
-          <li><code>week2-v2</code>, <code>week2-v3</code>, … — each optimization measured
-            against that baseline gets its own ID.</li>
-          <li><code>week3-v1</code> — a new baseline starts each week.</li>
-        </ul>
-
-        <h3>Workflow before measuring an optimization</h3>
-        <ol>
-          <li>Update the version ID in <code>version.cpp</code> and its expected value in
-            <code>tests/correctness/tests.cpp</code>.</li>
-          <li>Build the program in Release mode.</li>
-          <li>Run the correctness tests — a faster wrong answer isn't a win.</li>
-          <li>Run the performance tests.</li>
-          <li>Save the version ID alongside the performance results.</li>
-        </ol>
-        <p class="muted">
-          A version ID is never reused once its results are saved — every code change being
-          measured gets a fresh one, so the performance log can always point at exactly which
-          version a number came from.
-        </p>
-
-        <h3>The benchmark itself</h3>
-        <p class="muted">
-          <code>tests/performance/benchmark.cpp</code> runs against
-          <code>json/students.json</code> — 85,032 records, ~50&nbsp;MB — through
-          <code>uploadFile()</code>, <code>Session</code>, and the real query pipeline
-          (<code>AVERAGE(GET("gpa"))</code>), so it measures the same code path the CLI
-          actually uses, not a synthetic stand-in.
-        </p>
-        <pre><code>cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-./build/tests tests/data     # correctness first
-./build/benchmark             # then performance</code></pre>
-        <p class="muted">
-          One warm-up run followed by five measured runs; the last row is the median total
-          time. Every run also appends to <code>benchmarks/results/&lt;machine&gt;.csv</code>
-          (version, timestamp, machine/OS/compiler, dataset, query, record count, and load /
-          query / total timings), so results across versions <em>and</em> across teammates'
-          machines can be diffed or charted directly. Only directly compare runs made on the
-          same machine, build type, and dataset — cross-machine numbers in the same CSV are
-          useful for shape/trend, not head-to-head comparison.
-        </p>
-
-        <div class="callout">
-          <strong>What we actually found using this:</strong> parsing
-          <code>students.json</code> takes ~550&ndash;580&nbsp;ms regardless of which query
-          engine optimizations are in place — the JSON parser itself wasn't the bottleneck.
-          The real gap showed up in query execution: a <code>FILTER</code> matching nearly
-          every record and printing the full result added ~520&nbsp;ms on top of parsing,
-          versus ~40&nbsp;ms for one matching nothing. <code>AVERAGE</code> told the same story
-          from a different angle — see <a href="#algorithms">Algorithms &amp; Optimizations</a>
-          for the two optimizations that came out of chasing it and the before/after numbers.
+      <section id="roles">
+        <h2>Team &amp; Roles</h2>
+        <p class="muted">Reflects who owns what now — see <a href="#timeline">Timeline</a> for how the split shifted as the project grew.</p>
+        <div class="roles">
+          <div class="card">
+            <div class="owner">Jules</div>
+            <h4>Parser, scanner &amp; query grammar</h4>
+            <ul>
+              <li><code>FileScanner</code>/<code>FileParser</code> for JSON, and the strict escape/control-character validation on top</li>
+              <li>Fixed <code>\uXXXX</code> decoding to correctly combine surrogate pairs and UTF-8-encode the result — emoji decode and compare correctly</li>
+              <li>Designed and built <code>QueryScanner</code>/<code>QueryParser</code> — the tokenizer and recursive-descent grammar for the query language, including <code>AND</code>/<code>OR</code> and <code>AVERAGE</code>-as-operand (<a href="#feat-filter-average">Filter by Average</a>)</li>
+              <li>Fixed <code>.jsonl</code> parsing/scanning correctness, and rejected trailing content after a top-level scalar</li>
+              <li>Replaced both scanners' per-word/per-keyword character chains with static keyword-lookup tables, and <code>stod</code>/<code>stoi</code> with <code>from_chars</code> in the parsers — see <a href="#optimizations">Optimizations</a></li>
+              <li>Removed an extra full-document copy from <code>Session::initialize()</code> via move semantics</li>
+            </ul>
+          </div>
+          <div class="card">
+            <div class="owner">Javier</div>
+            <h4>Query execution engine &amp; performance</h4>
+            <ul>
+              <li>Implemented <code>FILTER</code>, <code>SORT</code>, <code>LIMIT</code>, <code>GROUPBY</code>, and <code>AVERAGE</code> against the expression tree in <code>excecuteQuery()</code></li>
+              <li>Sort-key precomputation and hash-map grouping (see <a href="#optimizations">Optimizations</a>) instead of the naive O(n log n) / O(n·groups) approach</li>
+              <li>Found and fixed several crash bugs (type-mismatch comparisons, non-numeric <code>AVERAGE</code>, invalid <code>GROUPBY</code> keys) so bad input fails cleanly instead of taking the program down</li>
+              <li>Fast-path key comparison in <code>get()</code> and a parallel reduction for <code>AVERAGE</code> — 40.7ms &rarr; 28.0ms measured query time on the 85k-record benchmark (see <a href="#optimizations">Optimizations</a>)</li>
+            </ul>
+          </div>
+          <div class="card">
+            <div class="owner">Ryan</div>
+            <h4>CLI &amp; benchmarking</h4>
+            <ul>
+              <li><code>Session</code>-based CLI (<code>main.cpp</code>) — menu-driven upload-once, query-many-times flow</li>
+              <li>Wired GNU Readline into <code>promptLine()</code> for arrow-key history and in-line editing, with a <code>CMakeLists.txt</code> <code>find_library</code> fallback when it isn't installed</li>
+              <li>Colorized <code>PASS</code>/<code>FAIL</code> output for the regression suite (<a href="#testing">Testing</a>)</li>
+              <li>CSV export for the benchmark harness (<code>benchmarks/results/&lt;machine&gt;.csv</code>), plus formatting cleanup on the benchmark table itself</li>
+            </ul>
+          </div>
         </div>
       </section>
 
       <section id="timeline">
         <h2>Timeline</h2>
         <p class="muted">
-          Sprint-by-sprint history and roadmap. We'll keep adding entries here as each
-          sprint lands, so this section is the running log rather than a fixed plan.
+          Sprint-by-sprint history and roadmap — this is where the "how we used to explain it"
+          context lives, so the sections above only need to describe the system as it stands
+          today.
         </p>
 
         <div class="timeline">
@@ -1257,7 +1554,7 @@ cmake --build build
           <div class="entry">
             <div class="date">Jul 28–29</div>
             <h4>First working parser</h4>
-            <p>Data-model concepts, a rough <code>Scanner</code> / <code>Parser</code> draft, and the first merge between branches to get end-to-end parsing working.</p>
+            <p>Data-model concepts, a rough scanner/parser draft, and the first merge between branches to get end-to-end parsing working.</p>
           </div>
           <div class="entry">
             <div class="date">Jul 30</div>
@@ -1267,7 +1564,7 @@ cmake --build build
           <div class="entry">
             <div class="date">Jul 31</div>
             <h4>Unified file reading</h4>
-            <p><code>jsonl-reader</code> renamed and generalized to <code>file-reader</code>, handling <code>.json</code> and <code>.jsonl</code> through the same <code>readFile()</code> entry point.</p>
+            <p>The JSONL-only reader was renamed and generalized into a single entry point that handles <code>.json</code> and <code>.jsonl</code> alike.</p>
           </div>
           <div class="entry">
             <div class="date">Aug 1</div>
@@ -1277,7 +1574,7 @@ cmake --build build
           <div class="entry">
             <div class="date">Aug 2</div>
             <h4>Bug pass &amp; CMake <span class="status done">done</span></h4>
-            <p>Fixed a crash on malformed top-level JSON, an uncaught-exception crash in <code>demo.cpp</code> on file-not-found, and a scanner bug that rejected valid numbers followed by whitespace. Replaced the per-person <code>g++</code> commands with a root <a href="#build-system">CMake build</a> — see that section for why.</p>
+            <p>Fixed a crash on malformed top-level JSON, an uncaught-exception crash on file-not-found, and a scanner bug that rejected valid numbers followed by whitespace. Replaced the per-person <code>g++</code> commands with a root <a href="#build-system">CMake build</a>.</p>
           </div>
 
           <div class="sprint-label">Sprint 2 (Week 2) — Aug 3&ndash;10</div>
@@ -1290,7 +1587,7 @@ cmake --build build
           <div class="entry">
             <div class="date">Aug 5&ndash;7</div>
             <h4>Two competing query engines, in parallel</h4>
-            <p>A regex-based query engine and Jules's tokenizer/AST-based <code>QueryParser</code> were built independently on separate branches at the same time. When they merged, the AST-based design — with real <code>AND</code> / <code>OR</code> support — is what moved forward.</p>
+            <p>A regex-based query engine and a tokenizer/AST-based <code>QueryParser</code> were built independently on separate branches at the same time. When they merged, the AST-based design — with real <code>AND</code> / <code>OR</code> support — is what moved forward.</p>
           </div>
           <div class="entry">
             <div class="date">Aug 8&ndash;9</div>
@@ -1300,12 +1597,12 @@ cmake --build build
           <div class="entry">
             <div class="date">Aug 9</div>
             <h4><code>FILTER</code> / <code>SORT</code> / <code>LIMIT</code> / <code>GROUPBY</code> / <code>AVERAGE</code> implemented <span class="status done">done</span></h4>
-            <p>All five were parsing correctly but executing as no-op stubs. Implemented against the expression tree, with sort-key precomputation and hash-map grouping — see <a href="#algorithms">Algorithms &amp; Optimizations</a> — plus fixes for three crash bugs found while testing them against real data.</p>
+            <p>All five were parsing correctly but executing as no-op stubs. Implemented against the expression tree, with sort-key precomputation and hash-map grouping, plus fixes for three crash bugs found while testing them against real data.</p>
           </div>
           <div class="entry">
             <div class="date">Aug 10</div>
-            <h4>Emoji/unicode fix, malformed-query safety <span class="status done">done</span></h4>
-            <p><code>\uXXXX</code> decoding now correctly combines surrogate pairs and UTF-8-encodes the result. A malformed query string no longer crashes the program — the parse exception is caught and reported instead.</p>
+            <h4>Emoji/unicode fix, malformed-query safety, filter by average <span class="status done">done</span></h4>
+            <p><code>\uXXXX</code> decoding now correctly combines surrogate pairs and UTF-8-encodes the result. A malformed query string no longer crashes the program. <code>AVERAGE</code> gained an expression form usable inside <code>FILTER</code> — see <a href="#feat-filter-average">Filter by Average</a>.</p>
           </div>
 
           <div class="sprint-label">Sprint 3 (Week 3) — Aug 11&ndash;17</div>
@@ -1318,7 +1615,7 @@ cmake --build build
           <div class="entry">
             <div class="date">Aug 14</div>
             <h4><code>.jsonl</code> fix &amp; regex removed from the scanner <span class="status done">done</span></h4>
-            <p>Jules fixed <code>.jsonl</code> scanning/parsing correctness (merged from <code>jsonl-parser-fix</code>) and replaced the scanner's per-number <code>std::regex_match</code> validation with a hand-rolled grammar walk — see <a href="#algorithms">Algorithms &amp; Optimizations</a>.</p>
+            <p>Fixed <code>.jsonl</code> scanning/parsing correctness and replaced the scanner's per-number <code>std::regex_match</code> validation with a hand-rolled grammar walk — later reverted, see <a href="#optimizations">Optimizations</a>.</p>
           </div>
           <div class="entry">
             <div class="date">Aug 16</div>
@@ -1328,14 +1625,37 @@ cmake --build build
           <div class="entry">
             <div class="date">Aug 17</div>
             <h4><code>AVERAGE</code> optimized: fast-path lookup + parallel reduction <span class="status done">done</span></h4>
-            <p>Javier profiled <code>AVERAGE(GET("gpa"))</code> against the 85k-record benchmark, fixed the allocation-heavy key comparison in <code>get()</code>, and parallelized <code>sumField</code>'s reduction across threads — 40.7ms &rarr; 28.0ms measured query time. Full writeup, theory, and before/after numbers in <a href="#algorithms">Algorithms &amp; Optimizations</a>.</p>
+            <p>Javier profiled <code>AVERAGE(GET("gpa"))</code> against the 85k-record benchmark, fixed the allocation-heavy key comparison in <code>get()</code>, and parallelized <code>sumField</code>'s reduction across threads — 40.7ms &rarr; 28.0ms measured query time. Full writeup in <a href="#optimizations">Optimizations &amp; Refactoring</a>.</p>
+          </div>
+
+          <div class="sprint-label">Sprint 4 (Week 4) — Aug 17&ndash;19</div>
+
+          <div class="entry">
+            <div class="date">Aug 17</div>
+            <h4>File rename &amp; move into <code>week4/</code></h4>
+            <p>Files renamed to reflect what they actually do — <code>scanner</code>/<code>parser</code> → <code>file-scanner</code>/<code>file-parser</code>, <code>file-reader</code> → <code>query-engine</code>, a new <code>query-scanner</code> split out of the query parser — and the working code moved into <code>week4/</code>.</p>
+          </div>
+          <div class="entry">
+            <div class="date">Aug 18</div>
+            <h4>Keyword tables, and a number-validation revert <span class="status done">done</span></h4>
+            <p>Both scanners switched from per-word character chains to a static keyword-lookup table (see <a href="#optimizations">Optimizations</a>). Number validation was rolled back from a hand-rolled walk to <code>std::regex</code> while a scanner issue was chased down. <code>FileParser::parse()</code>'s <code>JSON</code> branch was fixed to reject trailing content after a bare scalar.</p>
+          </div>
+          <div class="entry">
+            <div class="date">Aug 19</div>
+            <h4>Deep-copy &amp; <code>stoi</code>/<code>stod</code> cleanup, Release-only builds <span class="status done">done</span></h4>
+            <p><code>Session::initialize()</code> now moves its arguments instead of copying them; number parsing in the JSON parser, query parser, and <code>LIMIT</code> switched from <code>stod</code>/<code>stoi</code> on a temporary string to <code>std::from_chars</code>. <code>CMakeLists.txt</code> now hardcodes <code>CMAKE_BUILD_TYPE</code> to <code>Release</code>. Merged via PR #73.</p>
+          </div>
+          <div class="entry planned">
+            <div class="date">Before Aug 27</div>
+            <h4>Final submission prep</h4>
+            <p>Record the video demo, run the 20&ndash;200&nbsp;MB benchmark comparison, and close out whatever's still marked <span class="status planned">todo</span> on this page — see <a href="#testing">Testing</a>, <a href="#benchmarking">Benchmarking</a>, and <a href="#limitations">Limitations</a>.</p>
           </div>
         </div>
       </section>
     </main>
 
     <footer>
-      Sprint 3 in progress &middot; <a href="#timeline">Timeline</a> &middot; <a href="https://github.com/UCR-CS-179K-Summer-2026/project1">UCR-CS-179K-Summer-2026/project1</a>
+      Final submission week &middot; <a href="#timeline">Timeline</a> &middot; <a href="https://github.com/UCR-CS-179K-Summer-2026/project1">UCR-CS-179K-Summer-2026/project1</a>
     </footer>
   </body>
 </html>
