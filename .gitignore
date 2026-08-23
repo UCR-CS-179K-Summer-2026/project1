@@ -6,7 +6,9 @@ build/
 *.dylib
 *.dSYM/
 a.out
-benchmarks/
+benchmarks/*
+!benchmarks/results/
+!benchmarks/results/*.csv
 
 # Editors
 .vscode/

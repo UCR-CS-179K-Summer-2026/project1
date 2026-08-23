@@ -196,7 +196,7 @@ void checkField(const string& file, size_t index, const string& path, const stri
 
 void testVersion() {
     section("version");
-    check(getVersionId() == "week3-v1", "version ID");
+    check(getVersionId() == "week4-v1", "version ID");
 }
 
 void testPrimitives() {
