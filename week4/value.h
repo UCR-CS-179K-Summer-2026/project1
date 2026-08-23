@@ -33,6 +33,7 @@ class JSONValue {
 
     ValueType getType() const { return static_cast<ValueType>(value.index()); }
     const variant<ArrayValue, bool, nullptr_t, double, ObjectValue, string>& getValue() const { return value; }
+    variant<ArrayValue, bool, nullptr_t, double, ObjectValue, string>& getValue() { return value; }
 };
 
 inline string unescapeString(const string_view& str) {
