@@ -56,6 +56,32 @@ the main project folder.
 The tests use the sample files in `tests/data`. Run the tests from the main
 project folder, or give the test program the path to the data folder.
 
+## Performance Benchmarks
+
+The benchmark runs GET, AVERAGE, FILTER, SORT, and GROUPBY queries against
+`json/students.json`. Each query gets one warmup run and five recorded runs.
+The program prints each run and its median, then appends the results to a CSV
+file in `benchmarks/results`.
+
+- `nested_get`: `GET(42516, "address", "city")`
+- `average_gpa`: `AVERAGE(GET("gpa"))`
+- `filter_none`: `FILTER(GET("gpa") > 4)`
+- `filter_all`: `FILTER(GET("gpa") >= 2) | GET(85031, "student_id")`
+- `sort_gpa_desc`: `SORT(GET("gpa"), DESC) | GET(0, "student_id")`
+- `group_by_major`: `GROUPBY(GET("major")) | GET("Computer Science", 0, "student_id")`
+
+```sh
+./build/benchmark
+./build/benchmark --machine lab-mac
+./build/benchmark --output benchmarks/results/test-run.csv
+```
+
+Use the same machine name when collecting results on the same computer. The
+CSV records the version, machine, build information, query name, record count,
+and load, query, and total times. Use `query_ms` to compare the query cases.
+The load time is recorded separately because the file is loaded before every
+run.
+
 ## Using the CLI
 
 Start it with no arguments and you get a menu:
