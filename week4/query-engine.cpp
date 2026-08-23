@@ -322,30 +322,39 @@ string excecuteQuery(Session& session, const string& query) {
     const vector<QueryFunction>& pipeline = q.getFunctions();
     const vector<ExpressionNode>& nodes = q.getExpressionNodes();
 
-    JSONValue current = session.file;
+    JSONValue owned = JSONValue(nullptr);
+    const JSONValue* currentPtr = &session.file;
+
+    auto currentArray = [&]() -> ArrayValue& {
+        if (currentPtr != &owned) {
+            JSONValue materialized = *currentPtr;
+            owned = move(materialized);
+            currentPtr = &owned;
+        }
+        return get<ArrayValue>(owned.getValue());
+    };
 
     for (const QueryFunction& function : pipeline) {
         if (holds_alternative<Get>(function)) {
             const Get& getFunc = get<Get>(function);
             const GetOperand& operand = get<GetOperand>(nodes[getFunc.target]);
 
-            LookupResult result = get(current, operand.path);
+            LookupResult result = get(*currentPtr, operand.path);
             if (!result.ok) {
                 return formatResult(result);
             }
-            JSONValue next = *result.value;
-            current = move(next);
+            currentPtr = result.value;  // just repoint -- no copy needed to read further into the same tree
 
         } else if (holds_alternative<Filter>(function)) {
             const Filter& filterFunc = get<Filter>(function);
 
-            if (current.getType() != ValueType::Array) {
+            if (currentPtr->getType() != ValueType::Array) {
                 return formatResult(queryError("FILTER expects an array of records"));
             }
-            const ArrayValue& arr = get<ArrayValue>(current.getValue());
+            ArrayValue& arr = currentArray();
 
             ArrayValue matches;
-            for (const auto& record : arr) {
+            for (auto& record : arr) {
                 bool keep;
                 try {
                     keep = requireBoolean(evaluateNode(filterFunc.condition, nodes, record));
@@ -353,18 +362,19 @@ string excecuteQuery(Session& session, const string& query) {
                     continue;  // condition couldn't be evaluated for this record: doesn't match
                 }
                 if (keep) {
-                    matches.push_back(record);
+                    matches.push_back(move(record));
                 }
             }
-            current = JSONValue(move(matches));
+            owned = JSONValue(move(matches));
+            currentPtr = &owned;
 
         } else if (holds_alternative<Sort>(function)) {
             const Sort& sortFunc = get<Sort>(function);
 
-            if (current.getType() != ValueType::Array) {
+            if (currentPtr->getType() != ValueType::Array) {
                 return formatResult(queryError("SORT expects an array of records"));
             }
-            const ArrayValue& arr = get<ArrayValue>(current.getValue());
+            ArrayValue& arr = currentArray();
             const GetOperand& target = get<GetOperand>(nodes[sortFunc.target]);
 
             // Look up each record's sort key once up front (a "Schwartzian
@@ -390,30 +400,40 @@ string excecuteQuery(Session& session, const string& query) {
                 return formatResult(queryError(e.what()));
             }
 
+            // All key comparisons above are done, so it's safe to move each
+            // record out of `arr` now (each index is used exactly once).
             ArrayValue sorted;
             sorted.reserve(arr.size());
             for (const auto& [keyPtr, index] : keyed) {
-                sorted.push_back(arr[index]);
+                sorted.push_back(move(arr[index]));
             }
-            current = JSONValue(move(sorted));
+            owned = JSONValue(move(sorted));
+            currentPtr = &owned;
 
         } else if (holds_alternative<Limit>(function)) {
             const Limit& limitFunc = get<Limit>(function);
 
-            if (current.getType() != ValueType::Array) {
+            if (currentPtr->getType() != ValueType::Array) {
                 return formatResult(queryError("LIMIT expects an array of records"));
             }
-            const ArrayValue& arr = get<ArrayValue>(current.getValue());
+            ArrayValue& arr = currentArray();
             size_t count = min(static_cast<size_t>(limitFunc.size), arr.size());
-            current = JSONValue(ArrayValue(arr.begin(), arr.begin() + static_cast<long>(count)));
+
+            ArrayValue limited;
+            limited.reserve(count);
+            for (size_t i = 0; i < count; i++) {
+                limited.push_back(move(arr[i]));
+            }
+            owned = JSONValue(move(limited));
+            currentPtr = &owned;
 
         } else if (holds_alternative<GroupBy>(function)) {
             const GroupBy& groupFunc = get<GroupBy>(function);
 
-            if (current.getType() != ValueType::Array) {
+            if (currentPtr->getType() != ValueType::Array) {
                 return formatResult(queryError("GROUPBY expects an array of records"));
             }
-            const ArrayValue& arr = get<ArrayValue>(current.getValue());
+            ArrayValue& arr = currentArray();
             const GetOperand& target = get<GetOperand>(nodes[groupFunc.target]);
 
             // Hash map from group key to the bucket's index (O(1) average)
@@ -422,7 +442,7 @@ string excecuteQuery(Session& session, const string& query) {
             unordered_map<string, size_t> groupIndex;
             vector<pair<string, ArrayValue>> groups;
 
-            for (const auto& record : arr) {
+            for (auto& record : arr) {
                 LookupResult found = get(record, target.path);
                 if (!found.ok) {
                     continue;  // record missing the field: leave it out of every group
@@ -443,7 +463,7 @@ string excecuteQuery(Session& session, const string& query) {
                 } else {
                     index = it->second;
                 }
-                groups[index].second.push_back(record);
+                groups[index].second.push_back(move(record));
             }
 
             ObjectValue result;
@@ -451,22 +471,24 @@ string excecuteQuery(Session& session, const string& query) {
             for (auto& [key, bucket] : groups) {
                 result.emplace_back(move(key), JSONValue(move(bucket)));
             }
-            current = JSONValue(move(result));
+            owned = JSONValue(move(result));
+            currentPtr = &owned;
 
         } else if (holds_alternative<Average>(function)) {
             const Average& avgFunc = get<Average>(function);
             const AverageOperand& target = get<AverageOperand>(nodes[avgFunc.target]);
 
             try {
-                if (current.getType() == ValueType::Array) {
-                    auto [sum, count] = sumField(get<ArrayValue>(current.getValue()), target.path);
+                if (currentPtr->getType() == ValueType::Array) {
+                    auto [sum, count] = sumField(get<ArrayValue>(currentPtr->getValue()), target.path);
                     if (count == 0) {
                         return formatResult(queryError("no numeric values found for AVERAGE"));
                     }
-                    current = JSONValue(sum / static_cast<double>(count));
+                    owned = JSONValue(sum / static_cast<double>(count));
+                    currentPtr = &owned;
 
-                } else if (current.getType() == ValueType::Object) {
-                    const auto& groups = get<ObjectValue>(current.getValue());
+                } else if (currentPtr->getType() == ValueType::Object) {
+                    const auto& groups = get<ObjectValue>(currentPtr->getValue());
                     ObjectValue result;
                     for (const auto& [key, bucket] : groups) {
                         if (bucket.getType() != ValueType::Array) {
@@ -478,7 +500,8 @@ string excecuteQuery(Session& session, const string& query) {
                         }
                         result.emplace_back(key, JSONValue(sum / static_cast<double>(count)));
                     }
-                    current = JSONValue(move(result));
+                    owned = JSONValue(move(result));
+                    currentPtr = &owned;
 
                 } else {
                     return formatResult(queryError("AVERAGE expects an array of records, or a GROUPBY result"));
@@ -489,7 +512,7 @@ string excecuteQuery(Session& session, const string& query) {
         }
     }
 
-    return formatResult({true, &current, ""});
+    return formatResult({true, currentPtr, ""});
 }
 
 namespace {
