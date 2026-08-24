@@ -44,9 +44,6 @@
 #endif
 
 const filesystem::path PROJECT_ROOT = STREAMLINE_PROJECT_ROOT;
-const filesystem::path DATASET_PATH = PROJECT_ROOT / "json/students.json";
-const string DATASET_NAME = "json/students.json";
-const size_t EXPECTED_RECORDS = 85032;
 const int RUNS = 5;
 
 struct BenchmarkCase {
@@ -55,24 +52,103 @@ struct BenchmarkCase {
     string expectedResult;
 };
 
-const vector<BenchmarkCase> BENCHMARK_CASES = {
-    {"nested_get", R"(GET(42516, "address", "city"))", "\"Riverside\""},
-    {"average_gpa", R"(AVERAGE(GET("gpa")))", "3.00217"},
-    {"filter_none", R"(FILTER(GET("gpa") > 4))", "[]"},
-    {"filter_all", R"(FILTER(GET("gpa") >= 2) | GET(85031, "student_id"))", "85032"},
-    {"sort_gpa_desc", R"(SORT(GET("gpa"), DESC) | GET(0, "student_id"))", "229"},
-    {"group_by_major", R"(GROUPBY(GET("major")) | GET("Computer Science", 0, "student_id"))", "4"}
+struct BenchmarkDataset {
+    string name;
+    filesystem::path path;
+    size_t expectedRecords;
+    vector<BenchmarkCase> cases;
+};
+
+const vector<BenchmarkDataset> BENCHMARK_DATASETS = {
+    {
+        "json/students.json",
+        PROJECT_ROOT / "json/students.json",
+        85032,
+        {
+            {"nested_get", R"(GET(42516, "address", "city"))", "\"Riverside\""},
+            {"average", R"(AVERAGE(GET("gpa")))", "3.00217"},
+            {"filter_none", R"(FILTER(GET("gpa") > 4))", "[]"},
+            {"filter_all",
+             R"(FILTER(GET("gpa") >= 2) | GET(85031, "student_id"))", "85032"},
+            {"sort_pipeline",
+             R"(SORT(GET("gpa"), DESC) | GET(0, "student_id"))", "229"},
+            {"groupby_pipeline",
+             R"(GROUPBY(GET("major")) | GET("Computer Science", 0, "student_id"))", "4"},
+            {"sort", R"(SORT(GET("gpa"), DESC))", ""},
+            {"limit", "LIMIT(100)", ""},
+            {"groupby", R"(GROUPBY(GET("major")))", ""}
+        }
+    },
+    {
+        "json/cars.json",
+        PROJECT_ROOT / "json/cars.json",
+        70792,
+        {
+            {"nested_get", R"(GET(35396, "dealer", "rating"))", "4.6"},
+            {"average", R"(AVERAGE(GET("price_usd")))", "62258.6"},
+            {"filter_none", R"(FILTER(GET("price_usd") > 120000))", "[]"},
+            {"filter_all",
+             R"(FILTER(GET("price_usd") >= 0) | GET(70791, "car_id"))", "70792"},
+            {"sort_pipeline",
+             R"(SORT(GET("price_usd"), DESC) | GET(0, "car_id"))", "42250"},
+            {"groupby_pipeline",
+             R"(GROUPBY(GET("make")) | GET("Kia", 0, "car_id"))", "1"},
+            {"sort", R"(SORT(GET("price_usd"), DESC))", ""},
+            {"limit", "LIMIT(100)", ""},
+            {"groupby", R"(GROUPBY(GET("make")))", ""}
+        }
+    },
+    {
+        "json/housing.json",
+        PROJECT_ROOT / "json/housing.json",
+        47587,
+        {
+            {"nested_get", R"(GET(23793, "address", "city"))", "\"Rochester\""},
+            {"average", R"(AVERAGE(GET("price_usd")))", "2.54748e+06"},
+            {"filter_none", R"(FILTER(GET("price_usd") > 5000000))", "[]"},
+            {"filter_all",
+             R"(FILTER(GET("price_usd") >= 0) | GET(47586, "listing_id"))", "47587"},
+            {"sort_pipeline",
+             R"(SORT(GET("price_usd"), DESC) | GET(0, "listing_id"))", "20024"},
+            {"groupby_pipeline",
+             R"(GROUPBY(GET("property_type")) | GET("Single Family", 0, "listing_id"))", "1"},
+            {"sort", R"(SORT(GET("price_usd"), DESC))", ""},
+            {"limit", "LIMIT(100)", ""},
+            {"groupby", R"(GROUPBY(GET("property_type")))", ""}
+        }
+    },
+    {
+        "json/movies.json",
+        PROJECT_ROOT / "json/movies.json",
+        43315,
+        {
+            {"nested_get", R"(GET(21657, "ratings", "viewer_score"))", "6.6"},
+            {"average", R"(AVERAGE(GET("runtime_minutes")))", "140.059"},
+            {"filter_none", R"(FILTER(GET("runtime_minutes") > 210))", "[]"},
+            {"filter_all",
+             R"(FILTER(GET("runtime_minutes") >= 0) | GET(43314, "movie_id"))", "43315"},
+            {"sort_pipeline",
+             R"(SORT(GET("runtime_minutes"), DESC) | GET(0, "movie_id"))", "28"},
+            {"groupby_pipeline",
+             R"(GROUPBY(GET("country")) | GET("Mexico", 0, "movie_id"))", "1"},
+            {"sort", R"(SORT(GET("runtime_minutes"), DESC))", ""},
+            {"limit", "LIMIT(100)", ""},
+            {"groupby", R"(GROUPBY(GET("country")))", ""}
+        }
+    }
 };
 
 struct BenchmarkResult {
     size_t records;
-    string result;
+    bool valid;
     double loadMs;
     double queryMs;
     double totalMs;
 };
 
 struct BenchmarkRun {
+    string datasetName;
+    size_t datasetBytes;
     BenchmarkCase benchmark;
     vector<BenchmarkResult> results;
     BenchmarkResult median;
@@ -188,11 +264,11 @@ string csvField(const string& value) {
     return escaped;
 }
 
-BenchmarkResult runBenchmark(const BenchmarkCase& benchmark) {
+BenchmarkResult runBenchmark(const BenchmarkDataset& dataset, const BenchmarkCase& benchmark) {
     Session session;
 
     auto start = chrono::steady_clock::now();
-    uploadFile(DATASET_PATH.string(), session);
+    uploadFile(dataset.path.string(), session);
     auto loaded = chrono::steady_clock::now();
 
     ostringstream ignored;
@@ -208,20 +284,14 @@ BenchmarkResult runBenchmark(const BenchmarkCase& benchmark) {
     auto finished = chrono::steady_clock::now();
     cout.rdbuf(normalOutput);
 
-    size_t records = 0;
-    if (session.isInitialized && session.file.getType() == ValueType::Array) {
-        records = get<ArrayValue>(session.file.getValue()).size();
-    }
-
     double loadMs = chrono::duration<double, milli>(loaded - start).count();
     double queryMs = chrono::duration<double, milli>(finished - queryStarted).count();
     double totalMs = loadMs + queryMs;
+    bool valid = static_cast<size_t>(session.records) == dataset.expectedRecords
+                 && result.rfind("Error:", 0) != 0
+                 && (benchmark.expectedResult.empty() || result == benchmark.expectedResult);
 
-    return {records, result, loadMs, queryMs, totalMs};
-}
-
-bool validResult(const BenchmarkCase& benchmark, const BenchmarkResult& result) {
-    return result.records == EXPECTED_RECORDS && result.result == benchmark.expectedResult;
+    return {static_cast<size_t>(session.records), valid, loadMs, queryMs, totalMs};
 }
 
 void printResult(const string& run, const BenchmarkResult& result) {
@@ -233,8 +303,8 @@ void printResult(const string& run, const BenchmarkResult& result) {
 }
 
 void appendCsvRow(ofstream& output, const string& timestamp, const BenchmarkOptions& options,
-                  const string& benchmarkName, const string& sample, size_t datasetBytes,
-                  const BenchmarkResult& result) {
+                  const string& datasetName, size_t datasetBytes, const string& benchmarkName,
+                  const string& sample, const BenchmarkResult& result) {
     output << "1"
            << "," << csvField(timestamp)
            << "," << csvField(getVersionId())
@@ -243,7 +313,7 @@ void appendCsvRow(ofstream& output, const string& timestamp, const BenchmarkOpti
            << "," << csvField(STREAMLINE_SYSTEM_PROCESSOR)
            << "," << csvField(STREAMLINE_COMPILER)
            << "," << csvField(STREAMLINE_BUILD_TYPE)
-           << "," << csvField(DATASET_NAME)
+           << "," << csvField(datasetName)
            << "," << datasetBytes
            << "," << csvField(benchmarkName)
            << "," << result.records
@@ -272,14 +342,13 @@ void appendCsv(const BenchmarkOptions& options, const vector<BenchmarkRun>& benc
     }
 
     string timestamp = utcTimestamp();
-    size_t datasetBytes = filesystem::file_size(DATASET_PATH);
     for (const BenchmarkRun& run : benchmarkRuns) {
         for (size_t i = 0; i < run.results.size(); i++) {
-            appendCsvRow(output, timestamp, options, run.benchmark.name,
-                         to_string(i + 1), datasetBytes, run.results[i]);
+            appendCsvRow(output, timestamp, options, run.datasetName, run.datasetBytes,
+                         run.benchmark.name, to_string(i + 1), run.results[i]);
         }
-        appendCsvRow(output, timestamp, options, run.benchmark.name,
-                     "median", datasetBytes, run.median);
+        appendCsvRow(output, timestamp, options, run.datasetName, run.datasetBytes,
+                     run.benchmark.name, "median", run.median);
     }
 
     if (!output) {
@@ -303,47 +372,54 @@ int main(int argc, char** argv) {
 
         cout << "Streamline Benchmark\n"
              << "Version: " << getVersionId() << "\n"
-             << "Machine: " << options.machine << "\n"
-             << "Dataset: " << DATASET_NAME << "\n";
+             << "Machine: " << options.machine << "\n";
 
-        for (const BenchmarkCase& benchmark : BENCHMARK_CASES) {
-            BenchmarkResult warmup = runBenchmark(benchmark);
-            if (!validResult(benchmark, warmup)) {
-                cerr << "benchmark: unexpected result for " << benchmark.name << "\n";
-                return 1;
-            }
+        for (const BenchmarkDataset& dataset : BENCHMARK_DATASETS) {
+            cout << "\nDataset: " << dataset.name << "\n";
+            size_t datasetBytes = filesystem::file_size(dataset.path);
 
-            vector<BenchmarkResult> results;
-            results.reserve(RUNS);
-            for (int i = 0; i < RUNS; i++) {
-                BenchmarkResult result = runBenchmark(benchmark);
-                if (!validResult(benchmark, result)) {
-                    cerr << "benchmark: unexpected result for " << benchmark.name << "\n";
+            for (const BenchmarkCase& benchmark : dataset.cases) {
+                BenchmarkResult warmup = runBenchmark(dataset, benchmark);
+                if (!warmup.valid) {
+                    cerr << "benchmark: unexpected result for " << dataset.name
+                         << " " << benchmark.name << "\n";
                     return 1;
                 }
-                results.push_back(result);
-            }
 
-            cout << "\nBenchmark: " << benchmark.name << "\n"
-                 << "Query: " << benchmark.query << "\n"
-                 << "Records: " << results[0].records << "\n\n"
-                 << left << setw(8) << "Run"
-                 << right << setw(12) << "Load (ms)"
-                 << setw(13) << "Query (ms)"
-                 << setw(13) << "Total (ms)" << "\n";
-            for (size_t i = 0; i < results.size(); i++) {
-                printResult(to_string(i + 1), results[i]);
-            }
+                vector<BenchmarkResult> results;
+                results.reserve(RUNS);
+                for (int i = 0; i < RUNS; i++) {
+                    BenchmarkResult result = runBenchmark(dataset, benchmark);
+                    if (!result.valid) {
+                        cerr << "benchmark: unexpected result for " << dataset.name
+                             << " " << benchmark.name << "\n";
+                        return 1;
+                    }
+                    results.push_back(move(result));
+                }
 
-            vector<BenchmarkResult> sortedResults = results;
-            sort(sortedResults.begin(), sortedResults.end(), [](const BenchmarkResult& a,
-                                                                const BenchmarkResult& b) {
-                return a.totalMs < b.totalMs;
-            });
-            BenchmarkResult median = sortedResults[sortedResults.size() / 2];
-            cout << string(46, '-') << "\n";
-            printResult("Median", median);
-            benchmarkRuns.push_back({benchmark, move(results), median});
+                cout << "\nBenchmark: " << benchmark.name << "\n"
+                     << "Query: " << benchmark.query << "\n"
+                     << "Records: " << results[0].records << "\n\n"
+                     << left << setw(8) << "Run"
+                     << right << setw(12) << "Load (ms)"
+                     << setw(13) << "Query (ms)"
+                     << setw(13) << "Total (ms)" << "\n";
+                for (size_t i = 0; i < results.size(); i++) {
+                    printResult(to_string(i + 1), results[i]);
+                }
+
+                vector<BenchmarkResult> sortedResults = results;
+                sort(sortedResults.begin(), sortedResults.end(), [](const BenchmarkResult& a,
+                                                                    const BenchmarkResult& b) {
+                    return a.totalMs < b.totalMs;
+                });
+                BenchmarkResult median = sortedResults[sortedResults.size() / 2];
+                cout << string(46, '-') << "\n";
+                printResult("Median", median);
+                benchmarkRuns.push_back({dataset.name, datasetBytes, benchmark,
+                                         move(results), median});
+            }
         }
 
         appendCsv(options, benchmarkRuns);

@@ -58,17 +58,20 @@ project folder, or give the test program the path to the data folder.
 
 ## Performance Benchmarks
 
-The benchmark runs GET, AVERAGE, FILTER, SORT, and GROUPBY queries against
-`json/students.json`. Each query gets one warmup run and five recorded runs.
-The program prints each run and its median, then appends the results to a CSV
-file in `benchmarks/results`.
+The benchmark runs against `students.json`, `cars.json`, `housing.json`, and
+`movies.json`. Each file is 50 MB. Every query gets one warmup run and five
+recorded runs. The program prints each run and its median, then appends the
+results to a CSV file in `benchmarks/results`.
 
-- `nested_get`: `GET(42516, "address", "city")`
-- `average_gpa`: `AVERAGE(GET("gpa"))`
-- `filter_none`: `FILTER(GET("gpa") > 4)`
-- `filter_all`: `FILTER(GET("gpa") >= 2) | GET(85031, "student_id")`
-- `sort_gpa_desc`: `SORT(GET("gpa"), DESC) | GET(0, "student_id")`
-- `group_by_major`: `GROUPBY(GET("major")) | GET("Computer Science", 0, "student_id")`
+- `nested_get` reads a nested value from the middle of the file.
+- `average` averages a numeric field.
+- `filter_none` scans the file without matching records.
+- `filter_all` matches every record and finishes with a GET.
+- `sort_pipeline` sorts the records and finishes with a GET.
+- `groupby_pipeline` groups the records and finishes with a GET.
+- `sort` runs SORT by itself.
+- `limit` runs LIMIT by itself.
+- `groupby` runs GROUPBY by itself.
 
 ```sh
 ./build/benchmark
@@ -80,7 +83,8 @@ Use the same machine name when collecting results on the same computer. The
 CSV records the version, machine, build information, query name, record count,
 and load, query, and total times. Use `query_ms` to compare the query cases.
 The load time is recorded separately because the file is loaded before every
-run.
+run. Standalone SORT, LIMIT, and GROUPBY include the time needed to format
+their full results.
 
 ## Using the CLI
 
