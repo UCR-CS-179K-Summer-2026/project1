@@ -409,6 +409,8 @@ void testQueries() {
     checkQuery(records, R"(AVERAGE(GET("price")))", "5");
     checkQuery(records, R"(GROUPBY(GET("city")) | AVERAGE(GET("price")))",
                R"({"Riverside":3,"Los Angeles":9})");
+    checkQuery(records, R"(GROUPBY(GET("city")) | FILTER(AVERAGE(GET("price")) > 4))",
+               R"({"Los Angeles":[{"id":3,"city":"Los Angeles","price":9,"active":true,"profile":{"name":"C"}}]})");
 }
 
 int main(int argc, char** argv) {

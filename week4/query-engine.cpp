@@ -339,25 +339,43 @@ string excecuteQuery(Session& session, const string& query) {
         } else if (holds_alternative<Filter>(function)) {
             const Filter& filterFunc = get<Filter>(function);
 
-            if (current.getType() != ValueType::Array) {
-                return formatResult(queryError("FILTER expects an array of records"));
-            }
-            const ArrayValue& arr = get<ArrayValue>(current.getValue());
+            if (current.getType() == ValueType::Array) {
+                const ArrayValue& arr = get<ArrayValue>(current.getValue());
 
-            ArrayValue matches;
-            for (const auto& record : arr) {
-                bool keep;
-                try {
-                    keep = requireBoolean(evaluateNode(filterFunc.condition, nodes, record));
-                } catch (const exception&) {
-                    continue;  // condition couldn't be evaluated for this record: doesn't match
+                ArrayValue matches;
+                for (const auto& record : arr) {
+                    bool keep;
+                    try {
+                        keep = requireBoolean(evaluateNode(filterFunc.condition, nodes, record));
+                    } catch (const exception&) {
+                        continue;
+                    }
+                    if (keep) {
+                        matches.push_back(record);
+                    }
                 }
-                if (keep) {
-                    matches.push_back(record);
-                }
-            }
-            current = JSONValue(move(matches));
+                current = JSONValue(move(matches));
 
+            } else if (current.getType() == ValueType::Object) {
+                const ObjectValue& groups = get<ObjectValue>(current.getValue());
+
+                ObjectValue matches;
+                for (const auto& group : groups) {
+                    bool keep;
+                    try {
+                        keep = requireBoolean(evaluateNode(filterFunc.condition, nodes, group.second));
+                    } catch (const exception&) {
+                        continue;
+                    }
+                    if (keep) {
+                        matches.push_back(group);
+                    }
+                }
+                current = JSONValue(move(matches));
+
+            } else {
+                return formatResult(queryError("FILTER expects an array of records or a GROUPBY result"));
+            }
         } else if (holds_alternative<Sort>(function)) {
             const Sort& sortFunc = get<Sort>(function);
 
