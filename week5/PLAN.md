@@ -1,101 +1,49 @@
-# Sprint 4 Plan
+# Final Submission
 
-## Recap: Sprint 3
+## Recap: Sprint 4
 
-Shipped: hand-rolled number validation in both scanners, replacing
-`std::regex` (Jules); a fast path in `get()`'s field matching that skips
-`unescapeString()` when a candidate key has no backslash, plus a
-multithreaded parallel-reduction `AVERAGE` gated behind a size threshold
-(Brent's-theorem-informed, so small inputs don't pay thread-spinup cost)
-(Javier); `readline`/`libedit` wired into `promptLine()` via
-`find_path`/`find_library` in `CMakeLists.txt`, giving arrow-key history and
-in-line editing in the interactive menu on macOS/Linux, and `uploadFile()`
-switched from `ostringstream` streaming to a single sized `read()` (Ryan).
-Also landed: real multi-record `.jsonl` parsing (`Parser::parse()` now
-loops per line into an `ArrayValue` instead of capturing only the first
-record — the Sprint 2 gap is fixed), and an updated
-[design page](https://ucr-cs-179k-summer-2026.github.io/project1/)
-documenting the optimizations with before/after numbers.
+- Worked on final optimizations that were spotted going into sprint 4, cleaned up benchmarks, cleaned up website for final submission
 
-**Known gaps carried into Sprint 4, not yet fixed:**
+**Known gaps carried into Final Submission, not yet fixed:**
 
-- `QueryScanner::scan()` still recognizes `FILTER`/`GROUPBY`/`AVERAGE`/etc.
-  with one hand-written character-chain per keyword — the lookup-table
-  rewrite was scoped for Sprint 3 but didn't land.
-- `FILTER`/`GROUPBY` still deep-copy every matching `JSONValue`
-  (`matches.push_back(record)` in `excecuteQuery()`) instead of carrying
-  indices until final formatting.
-- `formatValue()` still returns a new `string` at every nesting level and
-  concatenates them back together instead of appending into one shared
-  output buffer.
-- `excecuteQuery()`'s branches (`Get`, `Filter`, `Sort`, `Limit`,
-  `GroupBy`, `Average`, ...) still duplicate shape-checking/error
-  construction — not yet pulled into a shared helper.
-- A bare scalar value followed by trailing content (e.g. `"a": 1` with no
-  wrapping braces, plus junk after it) can still slip through unrejected —
-  `Parser::parse()`'s `JSON` branch returns after the first `parseObject()`
-  without checking `currToken.type == End`. Open since Sprint 2, never
-  assigned to anyone.
+- Number validation intentionally uses `<regex>`, not the faster hand-rolled
+  version it replaced — rolled back for correctness under time pressure, not
+  an oversight. The hand-rolled version is still there, commented out; with
+  it back in, `uploadFile()`'s load time on `students.json` drops from
+  ~379ms to ~135ms (about -64%), a real and known cost we chose not to pay.
+- `formatValue()` is still the largest remaining cost in the system,
+  half-fixed. Numbers now format with `to_chars` instead of `ostringstream`,
+  which helps, but `formatValue()` still returns a new `string` per nesting
+  level instead of appending into one shared buffer — the bigger,
+  structural half of the cost, still open.
+- Materialization happens per-stage, not deferred all the way to
+  formatting. `FILTER`/`SORT`/`LIMIT`/`GROUPBY` only touch a record once
+  it's known to survive, but each stage still builds a real, owned array
+  instead of carrying indices through to the final format step.
+- `GROUPBY` on a numeric field still runs its key-text conversion once per
+  record instead of once per group. Cheaper per call now, but still the
+  wrong number of calls — three fixes were considered (typed key, cheap
+  `to_chars` swap, sort-based grouping) but none were implemented.
+- `get()`'s field lookup is a linear scan over an object's keys —
+  `O(object width)`, not `O(1)`. Fine at the object widths in our test/
+  benchmark data; would need revisiting for very wide objects.
+- Output only goes to `stdout` — no flag to write a query's result to a
+  file.
+- `FILTER(AVERAGE(...) > x)` only works one level of nesting deep — against
+  a flat array of plain records it silently matches nothing rather than
+  erroring.
+- Test suite gaps: no test exercises Filter by Average (only the
+  standalone `AVERAGE` stage is covered); the parallel `FILTER`/`GROUPBY`/
+  `AVERAGE` reductions were checked by hand against a synthetic large input
+  rather than by a permanent, automated test at that scale; no fuzz/
+  property-based testing.
 
-## Sprint 4 Goals
+## Final Submission Goals
 
-For this sprint, the goal is to try and get a final, optimized product to be ready for the final week of the class. We will also cleanup our website, fix small and empty code, and analyze more ways to optimize. 
+- The main goal is to finish up the benchmarking to account for bigger and bigger files, compare across the weeks to see how individual optimizations helped our project overtime, and create video submission
 
-## Assignments
 
-### Person 1 (Jules) — Query parser optimization (carried over)
-
-**Responsibilities**
-
-- Finish the `QueryScanner::scan()` keyword-table rewrite scoped for
-  Sprint 3: replace the one-chain-per-keyword matching (`FILTER`,
-  `GROUPBY`, `AVERAGE`, `SORT`, `LIMIT`, `GET`, `ASC`, `DESC`, `AND`, `OR`)
-  with a single lookup checked after scanning an identifier.
-- Look Into RegEx to DFA converter possibly and analyze parser for any other imporvements
-- Fix `Parser::parse()`'s `JSON` branch to reject trailing content after a
-  top-level scalar (check `currToken.type == End` after `parseObject()`
-  returns) — open since Sprint 2, still unassigned until now.
-
-**Example milestone:**
-
-    Before/after benchmark of QueryParser::parse() on a query with several
-    chained pipeline stages and a multi-condition FILTER, showing the
-    keyword-matching change actually moved the number (same milestone as
-    Sprint 3 — still not measured because the change didn't land).
-
-### Person 2 (Javier) — Feature cleanup & execution-engine optimization (carried over)
-
-**Responsibilities**
-
-- Stop deep-copying every matching `JSONValue` in `FILTER`/`GROUPBY` —
-  carry indices or pointers through the pipeline and only materialize real
-  copies at the final formatting step.
-- Change `formatValue()` to append into one shared output buffer passed by
-  reference through the recursion, instead of returning/concatenating a
-  new `string` at every nesting level.
-- Pass over `excecuteQuery()`'s branches for duplicated shape-checking/
-  error-construction logic that can be pulled into a shared helper without
-  changing behavior.
-
-**Example milestone:**
-
-    Re-run the FILTER-matching-~everything vs. matching-nothing benchmark
-    on json/students.json and show the gap shrink now that matches aren't
-    deep-copied.
-
-### Person 3 (Ryan) — Build system & CLI cleanup
-
-**Responsibilities**
-
-- Continue on optimizing GroupBy function to see if there's any room for optimization
-- Test for if super big JSON files work
-- Try to find anymore optimization opportunities
-
-**Example milestone:**
-
-    GroupBy function now runs 3ms faster than before with some other structure
-
-## Lab Session Check-In (Monday August 17th, 2026)
+## Lab Session Check-In (Monday August 24th, 2026)
 
 - Went over feedback given after the demo to try and analyze what exactly we should work on
-- Specifically, we went over RegEx to DFA converter, how string_view works, and other optimization opportunities. 
+- Going to implement more and more benchmarks to measure 
