@@ -1063,6 +1063,35 @@ function evaluate(node, record):        # expression-tree evaluation, used by FI
           of up to ten sequential character-by-character comparisons in the worst case.
         </p>
 
+        <h3>Move semantics on upload <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Jules</span></h3>
+        <p class="muted">
+          <code>Session::initialize(JSONValue v, string n)</code> used to do <code>file = v;
+          name = n;</code> — a copy-assignment of both arguments even though the function had
+          just received its own copies and would never use them again. It's now
+          <code>file = move(v); name = move(n);</code>, and the call site passes
+          <code>uploadFile</code>'s parsed document in with <code>move(temp)</code> as well —
+          removing an extra full deep-copy of the parsed document on every file upload.
+        </p>
+        <table>
+          <thead>
+            <tr><th>Dataset</th><th>Before</th><th>After</th><th>Change</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>cars.json</code> — 70,792 records</td><td>1000.0&nbsp;ms</td><td>727.9&nbsp;ms</td><td>&minus;27.2%</td></tr>
+            <tr><td><code>housing.json</code> — 47,587 records</td><td>1069.4&nbsp;ms</td><td>818.4&nbsp;ms</td><td>&minus;23.5%</td></tr>
+            <tr><td><code>movies.json</code> — 43,315 records</td><td>897.3&nbsp;ms</td><td>614.4&nbsp;ms</td><td>&minus;31.5%</td></tr>
+            <tr><td><code>students.json</code> — 85,032 records</td><td>1004.3&nbsp;ms</td><td>672.8&nbsp;ms</td><td>&minus;33.0%</td></tr>
+          </tbody>
+        </table>
+        <p class="muted">
+          Median <code>uploadFile()</code> load time (5 runs each, Release build, ~50&nbsp;MB
+          per file) across all four benchmark datasets — <code>Before</code> is the
+          snapshot immediately before this change, and <code>After</code> is that same
+          snapshot with only this move fix applied on top. Since nothing else differs between
+          the two, the 23&ndash;33% drop is attributable to removing that one redundant
+          deep-copy on every upload.
+        </p>
+
         <h3><code>from_chars</code> instead of <code>stod</code>/<code>stoi</code> <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Jules</span></h3>
         <p class="muted">
           Number parsing — in the JSON parser's <code>Number</code> case, the query parser's
@@ -1074,6 +1103,30 @@ function evaluate(node, record):        # expression-tree evaluation, used by FI
           no allocation, no locale lookup, no exceptions. The JSON-parser site is the highest
           value of the three, since it runs once per numeric field across the entire document
           on every upload.
+        </p>
+        <table>
+          <thead>
+            <tr><th>Dataset</th><th>Before</th><th>After</th><th>Change</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>cars.json</code> — 70,792 records</td><td>727.9&nbsp;ms</td><td>733.0&nbsp;ms</td><td>+0.7%</td></tr>
+            <tr><td><code>housing.json</code> — 47,587 records</td><td>818.4&nbsp;ms</td><td>665.8&nbsp;ms</td><td>&minus;18.6%</td></tr>
+            <tr><td><code>movies.json</code> — 43,315 records</td><td>614.4&nbsp;ms</td><td>514.9&nbsp;ms</td><td>&minus;16.2%</td></tr>
+            <tr><td><code>students.json</code> — 85,032 records</td><td>672.8&nbsp;ms</td><td>566.2&nbsp;ms</td><td>&minus;15.9%</td></tr>
+          </tbody>
+        </table>
+        <p class="muted">
+          Median <code>uploadFile()</code> load time (5 runs each, Release build, ~50&nbsp;MB
+          per file) across all four benchmark datasets — <code>Before</code> is the
+          snapshot immediately before this change, and <code>After</code> is that same
+          snapshot with only the <code>from_chars</code> swap applied on top. Three of the four
+          datasets show a clean 16&ndash;19% drop, consistent with removing one allocation and
+          one locale-aware parse per numeric field. <code>cars.json</code> is the outlier: its
+          median ticks up 0.7%, but the per-run spread for both snapshots (699&ndash;936&nbsp;ms
+          for v2.75, 621&ndash;787&nbsp;ms for v3) is wider than that 5&nbsp;ms gap, so this
+          reads as run-to-run noise rather than a real regression — see
+          <a href="#benchmarking">Benchmarking</a> for why single-pair comparisons
+          need that caveat.
         </p>
         <p class="muted">
           <code>get()</code>'s array-index parsing — the fourth <code>stoi</code> site — was
@@ -1092,16 +1145,6 @@ function evaluate(node, record):        # expression-tree evaluation, used by FI
           <code>GET("+1", ...)</code>-style indices, but changing accepted syntax for zero
           measured benefit wasn't a trade worth making, so this one site was put back exactly as
           it was.
-        </p>
-
-        <h3>Move semantics on upload <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Jules</span></h3>
-        <p class="muted">
-          <code>Session::initialize(JSONValue v, string n)</code> used to do <code>file = v;
-          name = n;</code> — a copy-assignment of both arguments even though the function had
-          just received its own copies and would never use them again. It's now
-          <code>file = move(v); name = move(n);</code>, and the call site passes
-          <code>uploadFile</code>'s parsed document in with <code>move(temp)</code> as well —
-          removing an extra full deep-copy of the parsed document on every file upload.
         </p>
 
         <h3>Bare-scalar trailing content, rejected <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Jules</span></h3>
