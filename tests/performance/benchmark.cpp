@@ -68,15 +68,15 @@ const vector<BenchmarkDataset> BENCHMARK_DATASETS = {
             {"nested_get", R"(GET(42516, "address", "city"))", "\"Riverside\""},
             {"average", R"(AVERAGE(GET("gpa")))", "3.00217"},
             {"filter_none", R"(FILTER(GET("gpa") > 4))", "[]"},
+            {"sort", R"(SORT(GET("gpa"), DESC))", ""},
+            {"limit", "LIMIT(100)", ""},
+            {"groupby", R"(GROUPBY(GET("major")))", ""},
             {"filter_all",
              R"(FILTER(GET("gpa") >= 2) | GET(85031, "student_id"))", "85032"},
             {"sort_pipeline",
              R"(SORT(GET("gpa"), DESC) | GET(0, "student_id"))", "229"},
             {"groupby_pipeline",
-             R"(GROUPBY(GET("major")) | GET("Computer Science", 0, "student_id"))", "4"},
-            {"sort", R"(SORT(GET("gpa"), DESC))", ""},
-            {"limit", "LIMIT(100)", ""},
-            {"groupby", R"(GROUPBY(GET("major")))", ""}
+             R"(GROUPBY(GET("major")) | GET("Computer Science", 0, "student_id"))", "4"}
         }
     },
     {
@@ -87,15 +87,15 @@ const vector<BenchmarkDataset> BENCHMARK_DATASETS = {
             {"nested_get", R"(GET(35396, "dealer", "rating"))", "4.6"},
             {"average", R"(AVERAGE(GET("price_usd")))", "62258.6"},
             {"filter_none", R"(FILTER(GET("price_usd") > 120000))", "[]"},
+            {"sort", R"(SORT(GET("price_usd"), DESC))", ""},
+            {"limit", "LIMIT(100)", ""},
+            {"groupby", R"(GROUPBY(GET("make")))", ""},
             {"filter_all",
              R"(FILTER(GET("price_usd") >= 0) | GET(70791, "car_id"))", "70792"},
             {"sort_pipeline",
              R"(SORT(GET("price_usd"), DESC) | GET(0, "car_id"))", "42250"},
             {"groupby_pipeline",
-             R"(GROUPBY(GET("make")) | GET("Kia", 0, "car_id"))", "1"},
-            {"sort", R"(SORT(GET("price_usd"), DESC))", ""},
-            {"limit", "LIMIT(100)", ""},
-            {"groupby", R"(GROUPBY(GET("make")))", ""}
+             R"(GROUPBY(GET("make")) | GET("Kia", 0, "car_id"))", "1"}
         }
     },
     {
@@ -106,15 +106,15 @@ const vector<BenchmarkDataset> BENCHMARK_DATASETS = {
             {"nested_get", R"(GET(23793, "address", "city"))", "\"Rochester\""},
             {"average", R"(AVERAGE(GET("price_usd")))", "2.54748e+06"},
             {"filter_none", R"(FILTER(GET("price_usd") > 5000000))", "[]"},
+            {"sort", R"(SORT(GET("price_usd"), DESC))", ""},
+            {"limit", "LIMIT(100)", ""},
+            {"groupby", R"(GROUPBY(GET("property_type")))", ""},
             {"filter_all",
              R"(FILTER(GET("price_usd") >= 0) | GET(47586, "listing_id"))", "47587"},
             {"sort_pipeline",
              R"(SORT(GET("price_usd"), DESC) | GET(0, "listing_id"))", "20024"},
             {"groupby_pipeline",
-             R"(GROUPBY(GET("property_type")) | GET("Single Family", 0, "listing_id"))", "1"},
-            {"sort", R"(SORT(GET("price_usd"), DESC))", ""},
-            {"limit", "LIMIT(100)", ""},
-            {"groupby", R"(GROUPBY(GET("property_type")))", ""}
+             R"(GROUPBY(GET("property_type")) | GET("Single Family", 0, "listing_id"))", "1"}
         }
     },
     {
@@ -125,15 +125,15 @@ const vector<BenchmarkDataset> BENCHMARK_DATASETS = {
             {"nested_get", R"(GET(21657, "ratings", "viewer_score"))", "6.6"},
             {"average", R"(AVERAGE(GET("runtime_minutes")))", "140.059"},
             {"filter_none", R"(FILTER(GET("runtime_minutes") > 210))", "[]"},
+            {"sort", R"(SORT(GET("runtime_minutes"), DESC))", ""},
+            {"limit", "LIMIT(100)", ""},
+            {"groupby", R"(GROUPBY(GET("country")))", ""},
             {"filter_all",
              R"(FILTER(GET("runtime_minutes") >= 0) | GET(43314, "movie_id"))", "43315"},
             {"sort_pipeline",
              R"(SORT(GET("runtime_minutes"), DESC) | GET(0, "movie_id"))", "28"},
             {"groupby_pipeline",
-             R"(GROUPBY(GET("country")) | GET("Mexico", 0, "movie_id"))", "1"},
-            {"sort", R"(SORT(GET("runtime_minutes"), DESC))", ""},
-            {"limit", "LIMIT(100)", ""},
-            {"groupby", R"(GROUPBY(GET("country")))", ""}
+             R"(GROUPBY(GET("country")) | GET("Mexico", 0, "movie_id"))", "1"}
         }
     }
 };

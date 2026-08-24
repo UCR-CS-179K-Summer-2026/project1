@@ -227,12 +227,12 @@ results to a CSV file in `benchmarks/results`.
 - `nested_get` reads a nested value from the middle of the file.
 - `average` averages a numeric field.
 - `filter_none` scans the file without matching records.
-- `filter_all` matches every record and finishes with a GET.
-- `sort_pipeline` sorts the records and finishes with a GET.
-- `groupby_pipeline` groups the records and finishes with a GET.
 - `sort` runs SORT by itself.
 - `limit` runs LIMIT by itself.
 - `groupby` runs GROUPBY by itself.
+- `filter_all` matches every record and finishes with a GET.
+- `sort_pipeline` sorts the records and finishes with a GET.
+- `groupby_pipeline` groups the records and finishes with a GET.
 
 ```sh
 ./build/benchmark

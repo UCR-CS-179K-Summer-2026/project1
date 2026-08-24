@@ -325,13 +325,35 @@ string excecuteQuery(Session& session, const string& query) {
     JSONValue owned = JSONValue(nullptr);
     const JSONValue* currentPtr = &session.file;
 
-    auto currentArray = [&]() -> ArrayValue& {
-        if (currentPtr != &owned) {
-            JSONValue materialized = *currentPtr;
-            owned = move(materialized);
-            currentPtr = &owned;
+    // True once currentPtr points somewhere inside `owned`'s own tree --
+    // i.e. once some earlier stage has already produced a value nobody
+    // else needs, so records under it can be moved instead of copied.
+    // False while currentPtr still points into session.file's tree, which
+    // must come out of this query unmutated (the next query needs it
+    // intact). GET narrows currentPtr within whichever tree it's already
+    // in, so it never changes which one that is -- only FILTER/SORT/
+    // LIMIT/GROUPBY/AVERAGE do, by building a genuinely new `owned` value.
+    bool owns = false;
+
+    // Takes record i out of arr as an owned JSONValue: a move (steals the
+    // record's internal buffers -- strings, nested arrays -- rather than
+    // recursively duplicating them) if arr really is owned's storage, a
+    // real copy if arr is still borrowed from session.file. Only ever
+    // called for a record a stage is actually keeping, never for one it
+    // skips -- that's what stops a FILTER/GROUPBY that keeps almost
+    // nothing from paying for records it's about to throw away, and what
+    // lets LIMIT(n) touch exactly n records regardless of how large the
+    // array feeding it is.
+    auto take = [](const ArrayValue& arr, size_t i, bool owns) -> JSONValue {
+        if (owns) {
+            // Safe: `owns` being true is exactly the guarantee that arr is
+            // owned's own (genuinely mutable) storage, not session.file's --
+            // this const_cast undoes the const view we deliberately kept
+            // uniform with the borrowed-from-session.file case, it doesn't
+            // discard any real constness.
+            return move(const_cast<JSONValue&>(arr[i]));
         }
-        return get<ArrayValue>(owned.getValue());
+        return arr[i];
     };
 
     for (const QueryFunction& function : pipeline) {
@@ -351,22 +373,81 @@ string excecuteQuery(Session& session, const string& query) {
             if (currentPtr->getType() != ValueType::Array) {
                 return formatResult(queryError("FILTER expects an array of records"));
             }
-            ArrayValue& arr = currentArray();
+            const ArrayValue& arr = get<ArrayValue>(currentPtr->getValue());
+
+            // Evaluating one record's predicate never touches another
+            // record, so this is the same map/partition/merge shape as
+            // sumField's reduction: each thread filters its own [begin,
+            // end) slice into its own local ArrayValue (using the same
+            // take() rule -- move if owned, copy if borrowed -- since
+            // indices are disjoint across threads, no two threads ever
+            // touch the same element). No exception-across-threads
+            // workaround is needed here the way sumField needed
+            // hasTypeError: a record whose condition can't be evaluated
+            // is already caught and skipped locally, per record, same as
+            // the sequential version -- nothing ever needs to escape a
+            // worker thread.
+            auto filterRange = [&](size_t begin, size_t end) -> ArrayValue {
+                ArrayValue localMatches;
+                for (size_t i = begin; i < end; i++) {
+                    bool keep;
+                    try {
+                        keep = requireBoolean(evaluateNode(filterFunc.condition, nodes, arr[i]));
+                    } catch (const exception&) {
+                        continue;  // condition couldn't be evaluated for this record: doesn't match
+                    }
+                    if (keep) {
+                        localMatches.push_back(take(arr, i, owns));
+                    }
+                }
+                return localMatches;
+            };
+
+            size_t n = arr.size();
+            unsigned int hwThreads = thread::hardware_concurrency();
+            size_t threadCount = hwThreads == 0 ? 1 : static_cast<size_t>(hwThreads);
 
             ArrayValue matches;
-            for (auto& record : arr) {
-                bool keep;
-                try {
-                    keep = requireBoolean(evaluateNode(filterFunc.condition, nodes, record));
-                } catch (const exception&) {
-                    continue;  // condition couldn't be evaluated for this record: doesn't match
+            if (n < PARALLEL_THRESHOLD || threadCount <= 1) {
+                matches = filterRange(0, n);
+            } else {
+                size_t chunkSize = (n + threadCount - 1) / threadCount;
+                vector<ArrayValue> partials(threadCount);
+                vector<thread> workers;
+                workers.reserve(threadCount);
+                for (size_t t = 0; t < threadCount; t++) {
+                    size_t begin = t * chunkSize;
+                    size_t end = min(begin + chunkSize, n);
+                    if (begin >= end) {
+                        break;
+                    }
+                    workers.emplace_back([&, begin, end, t]() {
+                        partials[t] = filterRange(begin, end);
+                    });
                 }
-                if (keep) {
-                    matches.push_back(move(record));
+                for (thread& worker : workers) {
+                    worker.join();
+                }
+
+                // Merge: partitions cover strictly increasing, disjoint
+                // index ranges, so concatenating their matches in
+                // partition order reproduces the exact same relative
+                // order the sequential version would have produced.
+                size_t total = 0;
+                for (const ArrayValue& partial : partials) {
+                    total += partial.size();
+                }
+                matches.reserve(total);
+                for (ArrayValue& partial : partials) {
+                    for (JSONValue& record : partial) {
+                        matches.push_back(move(record));
+                    }
                 }
             }
+
             owned = JSONValue(move(matches));
             currentPtr = &owned;
+            owns = true;
 
         } else if (holds_alternative<Sort>(function)) {
             const Sort& sortFunc = get<Sort>(function);
@@ -374,7 +455,7 @@ string excecuteQuery(Session& session, const string& query) {
             if (currentPtr->getType() != ValueType::Array) {
                 return formatResult(queryError("SORT expects an array of records"));
             }
-            ArrayValue& arr = currentArray();
+            const ArrayValue& arr = get<ArrayValue>(currentPtr->getValue());
             const GetOperand& target = get<GetOperand>(nodes[sortFunc.target]);
 
             // Look up each record's sort key once up front (a "Schwartzian
@@ -390,25 +471,43 @@ string excecuteQuery(Session& session, const string& query) {
                 keyed.emplace_back(found.value, i);
             }
 
-            bool descending = sortFunc.direction == Direction::Desc;
+            // Ascending wants "a < b"; descending wants "a > b" -- both are
+            // a single compareValues call. The previous version computed
+            // "a < b" and, for descending, *also* "a == b" to build "not
+            // less and not equal" as a roundabout way of saying "greater" --
+            // two comparisons per call instead of one, for every one of the
+            // O(n log n) comparisons stable_sort makes (~1.4M of them at
+            // 85k records) whenever the sort was descending.
+            QueryTokenType comparisonOp = sortFunc.direction == Direction::Desc ? QueryTokenType::Gt : QueryTokenType::Lt;
             try {
                 stable_sort(keyed.begin(), keyed.end(), [&](const auto& a, const auto& b) {
-                    bool less = compareValues(*a.first, QueryTokenType::Lt, *b.first);
-                    return descending ? (!less && !valuesEqual(*a.first, *b.first)) : less;
+                    return compareValues(*a.first, comparisonOp, *b.first);
                 });
             } catch (const exception& e) {
                 return formatResult(queryError(e.what()));
             }
 
-            // All key comparisons above are done, so it's safe to move each
-            // record out of `arr` now (each index is used exactly once).
+            // SORT keeps every record (just reordered) -- unlike
+            // FILTER/GROUPBY/LIMIT there's no work to skip, so take()'s
+            // per-record laziness buys nothing here and only adds a
+            // function call per element. Since every record is wanted,
+            // take the whole array in one bulk operation instead: a move
+            // (O(1) -- steals the vector's buffer wholesale) if it's
+            // already owned, a copy (the vector's own bulk copy
+            // constructor, sequential and cache-friendly) if it's still
+            // borrowed from session.file. Either way, permuting into sort
+            // order afterward is just moves -- a few pointer-swaps per
+            // record -- so doing that scattered-order pass on already-owned
+            // records is cheap in a way scattering the copy itself would not be.
+            ArrayValue records = owns ? move(const_cast<ArrayValue&>(arr)) : arr;
             ArrayValue sorted;
-            sorted.reserve(arr.size());
+            sorted.reserve(records.size());
             for (const auto& [keyPtr, index] : keyed) {
-                sorted.push_back(move(arr[index]));
+                sorted.push_back(move(records[index]));
             }
             owned = JSONValue(move(sorted));
             currentPtr = &owned;
+            owns = true;
 
         } else if (holds_alternative<Limit>(function)) {
             const Limit& limitFunc = get<Limit>(function);
@@ -416,16 +515,20 @@ string excecuteQuery(Session& session, const string& query) {
             if (currentPtr->getType() != ValueType::Array) {
                 return formatResult(queryError("LIMIT expects an array of records"));
             }
-            ArrayValue& arr = currentArray();
+            const ArrayValue& arr = get<ArrayValue>(currentPtr->getValue());
             size_t count = min(static_cast<size_t>(limitFunc.size), arr.size());
 
+            // Only the surviving `count` records are ever touched -- the
+            // rest of arr (which may be most of an 85k-record array) is
+            // never read, copied, or moved at all.
             ArrayValue limited;
             limited.reserve(count);
             for (size_t i = 0; i < count; i++) {
-                limited.push_back(move(arr[i]));
+                limited.push_back(take(arr, i, owns));
             }
             owned = JSONValue(move(limited));
             currentPtr = &owned;
+            owns = true;
 
         } else if (holds_alternative<GroupBy>(function)) {
             const GroupBy& groupFunc = get<GroupBy>(function);
@@ -433,37 +536,106 @@ string excecuteQuery(Session& session, const string& query) {
             if (currentPtr->getType() != ValueType::Array) {
                 return formatResult(queryError("GROUPBY expects an array of records"));
             }
-            ArrayValue& arr = currentArray();
+            const ArrayValue& arr = get<ArrayValue>(currentPtr->getValue());
             const GetOperand& target = get<GetOperand>(nodes[groupFunc.target]);
 
-            // Hash map from group key to the bucket's index (O(1) average)
-            // so finding-or-creating a record's group doesn't mean scanning
-            // every group seen so far.
+            // Same map/partition/merge shape as FILTER above, one level
+            // richer: each thread builds its own key -> bucket map (hash
+            // map from group key to bucket index, same O(1)-average
+            // reasoning as the sequential version) over its own slice,
+            // then the "reduce" step below combines the (small number of)
+            // local maps into one.
+            struct LocalGroups {
+                unordered_map<string, size_t> index;
+                vector<pair<string, ArrayValue>> groups;
+            };
+
+            auto groupRange = [&](size_t begin, size_t end) -> LocalGroups {
+                LocalGroups local;
+                for (size_t i = begin; i < end; i++) {
+                    LookupResult found = get(arr[i], target.path);
+                    if (!found.ok) {
+                        continue;  // record missing the field: leave it out of every group
+                    }
+                    string key;
+                    try {
+                        key = groupKeyText(*found.value);
+                    } catch (const exception&) {
+                        continue;  // field isn't a valid group key (array/object): leave it out
+                    }
+
+                    auto it = local.index.find(key);
+                    size_t bucketIndex;
+                    if (it == local.index.end()) {
+                        bucketIndex = local.groups.size();
+                        local.index.emplace(key, bucketIndex);
+                        local.groups.emplace_back(key, ArrayValue{});
+                    } else {
+                        bucketIndex = it->second;
+                    }
+                    local.groups[bucketIndex].second.push_back(take(arr, i, owns));
+                }
+                return local;
+            };
+
+            size_t n = arr.size();
+            unsigned int hwThreads = thread::hardware_concurrency();
+            size_t threadCount = hwThreads == 0 ? 1 : static_cast<size_t>(hwThreads);
+
             unordered_map<string, size_t> groupIndex;
             vector<pair<string, ArrayValue>> groups;
 
-            for (auto& record : arr) {
-                LookupResult found = get(record, target.path);
-                if (!found.ok) {
-                    continue;  // record missing the field: leave it out of every group
+            if (n < PARALLEL_THRESHOLD || threadCount <= 1) {
+                LocalGroups local = groupRange(0, n);
+                groupIndex = move(local.index);
+                groups = move(local.groups);
+            } else {
+                size_t chunkSize = (n + threadCount - 1) / threadCount;
+                vector<LocalGroups> partials(threadCount);
+                vector<thread> workers;
+                workers.reserve(threadCount);
+                for (size_t t = 0; t < threadCount; t++) {
+                    size_t begin = t * chunkSize;
+                    size_t end = min(begin + chunkSize, n);
+                    if (begin >= end) {
+                        break;
+                    }
+                    workers.emplace_back([&, begin, end, t]() {
+                        partials[t] = groupRange(begin, end);
+                    });
                 }
-                string key;
-                try {
-                    key = groupKeyText(*found.value);
-                } catch (const exception&) {
-                    continue;  // field isn't a valid group key (array/object): leave it out
+                for (thread& worker : workers) {
+                    worker.join();
                 }
 
-                auto it = groupIndex.find(key);
-                size_t index;
-                if (it == groupIndex.end()) {
-                    index = groups.size();
-                    groupIndex.emplace(key, index);
-                    groups.emplace_back(key, ArrayValue{});
-                } else {
-                    index = it->second;
+                // Reduce: merge the local group maps in partition order.
+                // Partitions cover strictly increasing, disjoint index
+                // ranges, so a key's first appearance always surfaces in
+                // the partition that actually contains its true first
+                // occurrence -- merging partition-by-partition, and
+                // within each partition in its own first-seen order,
+                // reconstructs the exact group order (and, by appending
+                // each partition's bucket for a key in the same order,
+                // the exact within-group record order) the sequential
+                // version would have produced.
+                for (LocalGroups& local : partials) {
+                    for (auto& [key, bucket] : local.groups) {
+                        auto it = groupIndex.find(key);
+                        size_t index;
+                        if (it == groupIndex.end()) {
+                            index = groups.size();
+                            groupIndex.emplace(key, index);
+                            groups.emplace_back(key, ArrayValue{});
+                        } else {
+                            index = it->second;
+                        }
+                        ArrayValue& combined = groups[index].second;
+                        combined.reserve(combined.size() + bucket.size());
+                        for (JSONValue& record : bucket) {
+                            combined.push_back(move(record));
+                        }
+                    }
                 }
-                groups[index].second.push_back(move(record));
             }
 
             ObjectValue result;
@@ -473,6 +645,7 @@ string excecuteQuery(Session& session, const string& query) {
             }
             owned = JSONValue(move(result));
             currentPtr = &owned;
+            owns = true;
 
         } else if (holds_alternative<Average>(function)) {
             const Average& avgFunc = get<Average>(function);
@@ -486,6 +659,7 @@ string excecuteQuery(Session& session, const string& query) {
                     }
                     owned = JSONValue(sum / static_cast<double>(count));
                     currentPtr = &owned;
+                    owns = true;
 
                 } else if (currentPtr->getType() == ValueType::Object) {
                     const auto& groups = get<ObjectValue>(currentPtr->getValue());
@@ -502,6 +676,7 @@ string excecuteQuery(Session& session, const string& query) {
                     }
                     owned = JSONValue(move(result));
                     currentPtr = &owned;
+                    owns = true;
 
                 } else {
                     return formatResult(queryError("AVERAGE expects an array of records, or a GROUPBY result"));
