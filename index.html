@@ -1073,8 +1073,25 @@ function evaluate(node, record):        # expression-tree evaluation, used by FI
           (<code>&lt;charconv&gt;</code>) directly on the <code>string_view</code>'s pointers —
           no allocation, no locale lookup, no exceptions. The JSON-parser site is the highest
           value of the three, since it runs once per numeric field across the entire document
-          on every upload. <code>get()</code>'s array-index parsing still goes through
-          <code>stoi</code> on a temporary string — see <a href="#limitations">Limitations</a>.
+          on every upload.
+        </p>
+        <p class="muted">
+          <code>get()</code>'s array-index parsing — the fourth <code>stoi</code> site — was
+          tried too, and reverted, on purpose. Tracing every call site where <code>get()</code>
+          runs inside a per-record hot loop (<code>FILTER</code>'s predicate, <code>SORT</code>'s
+          key lookup, <code>GROUPBY</code>'s key lookup, <code>AVERAGE</code>'s field sum) across
+          every benchmark query showed each one passing a <em>field name</em>
+          (<code>"gpa"</code>, <code>"major"</code>) — never a numeric literal — so none of
+          them ever reach this branch at all; it only fires for the handful of
+          <code>GET(0, ...)</code>-style calls at the end of a query, once per query, never once
+          per record. Benchmarking confirmed zero measured difference either way. Making the
+          swap anyway surfaced a real, if obscure, behavior change: <code>std::from_chars</code>
+          doesn't accept a leading <code>+</code> the way <code>stoi</code> (which wraps
+          <code>strtol</code>) does — <code>stoi("+1", ...)</code> parses cleanly to <code>1</code>,
+          <code>from_chars</code> rejects it as ill-formed. No test exercised
+          <code>GET("+1", ...)</code>-style indices, but changing accepted syntax for zero
+          measured benefit wasn't a trade worth making, so this one site was put back exactly as
+          it was.
         </p>
 
         <h3>Move semantics on upload <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Jules</span></h3>
@@ -1208,6 +1225,114 @@ function evaluate(node, record):        # expression-tree evaluation, used by FI
           arithmetic would.
         </p>
 
+        <h3>Eliminating the query-start and per-stage deep copies <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Jules &amp; Javier</span></h3>
+        <p class="muted">
+          <code>excecuteQuery()</code> used to do <code>JSONValue current = session.file;</code>
+          — a full deep copy of the entire uploaded document before a single field was read, on
+          <em>every</em> query. Jules's fix replaced that with a borrowed
+          <code>const JSONValue*</code> that only materializes an owned, mutable copy
+          (<code>owned</code>) the first time a stage actually needs to consume the array — and
+          from then on, <code>FILTER</code>/<code>SORT</code>/<code>LIMIT</code>/<code>GROUPBY</code>
+          <em>move</em> records into their result instead of copying them again at every stage.
+        </p>
+        <p class="muted">
+          Benchmarking this before calling it done (rather than assuming) turned up one real
+          gap: that first materialization was <em>unconditional</em> — a <code>FILTER</code>
+          matching zero records still paid to copy the entire array before rejecting all of it.
+          <code>FILTER(GET("gpa") &gt; 4)</code>, which matches almost nothing on the benchmark
+          dataset, cost 35.5&nbsp;ms — the same as copying the whole array, for zero records
+          kept. The fix: only ever call <code>take()</code> — move if already owned, copy if
+          still borrowed from <code>session.file</code> — for a record a stage has
+          <em>already decided to keep</em>. A record that fails the predicate, or that
+          <code>LIMIT</code> never reaches, is never touched at all.
+        </p>
+        <p class="muted">
+          <code>SORT</code> is a deliberate exception: it keeps every record, so per-record
+          laziness buys it nothing and only adds a function-call per element. It instead takes
+          the whole array in one bulk operation — an <code>O(1)</code> vector <em>move</em> if
+          already owned, one bulk vector <em>copy</em> (sequential, cache-friendly) if still
+          borrowed — then permutes into sort order via cheap element-wise moves afterward. (A
+          first pass at this ran <code>take()</code> once per record <em>in sorted order</em>,
+          which meant copying records in a scattered access pattern instead of sequentially — a
+          real, measured ~10% regression, caught by benchmarking before it shipped rather than
+          discovered after.)
+        </p>
+        <table>
+          <thead>
+            <tr><th>Query</th><th>Before</th><th>After</th><th>Change</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>FILTER(GET("gpa") &gt; 4)</code> — matches ~0</td><td>35.5&nbsp;ms</td><td>4.8&nbsp;ms</td><td>&minus;86%</td></tr>
+            <tr><td><code>FILTER(...) | GET(...)</code> — matches ~all</td><td>34.5&nbsp;ms</td><td>30.1&nbsp;ms</td><td>&minus;13%</td></tr>
+            <tr><td><code>SORT(...) | GET(...)</code></td><td>76.5&nbsp;ms</td><td>77.2&nbsp;ms</td><td>— (unaffected, as expected)</td></tr>
+            <tr><td><code>GROUPBY(...) | GET(...)</code></td><td>63.1&nbsp;ms</td><td>61.1&nbsp;ms</td><td>&minus;3%</td></tr>
+          </tbody>
+        </table>
+        <p class="muted">
+          Exactly the shape the theory predicts: stages that can reject records improve
+          dramatically when the reject rate is high, improve only modestly when almost
+          everything survives anyway (there's still one unavoidable copy per surviving record),
+          and <code>SORT</code>/<code>GROUPBY</code> — which touch every record regardless —
+          land flat, since there was no wasted work left in them to remove.
+        </p>
+
+        <h3>Parallel <code>FILTER</code> and <code>GROUPBY</code> <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Javier</span></h3>
+        <p class="muted">
+          Both extend <code>AVERAGE</code>'s map/partition/merge reduction to a different shape
+          of work: evaluating one record's predicate (or group key) never touches another
+          record, so each thread filters/groups its own <code>[begin, end)</code> slice
+          independently, gated behind the same <code>PARALLEL_THRESHOLD</code> already
+          calibrated for <code>AVERAGE</code>. Neither needed <code>AVERAGE</code>'s
+          <code>hasTypeError</code> cross-thread workaround — a record whose condition/key can't
+          be evaluated was already caught and skipped <em>inside</em> the per-record loop, so
+          nothing ever needs to escape a worker thread.
+        </p>
+        <p class="muted">
+          <code>FILTER</code>'s merge is a plain ordered concatenation: partitions cover
+          strictly increasing, disjoint index ranges, so concatenating their matches in
+          partition order reproduces the exact relative order the sequential version would have
+          produced. <code>GROUPBY</code>'s merge is one step richer — each thread builds its own
+          local key&rarr;bucket map, and the reduce step combines those local maps in partition
+          order, which reconstructs the exact group order <em>and</em> within-group record
+          order: a key's true first occurrence always surfaces in whichever partition actually
+          contains it, so merging partition-by-partition never reorders anything. Verified
+          directly with a synthetic 20,000-record file cycling four keys — output group order
+          and every group's internal record order matched the sequential version exactly.
+        </p>
+        <table>
+          <thead>
+            <tr><th>Query</th><th>Before</th><th>After</th><th>Change</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>FILTER(GET("gpa") &gt; 4)</code> — matches ~0</td><td>4.8&nbsp;ms</td><td>~1.1&nbsp;ms</td><td>&minus;77%</td></tr>
+            <tr><td><code>FILTER(...) | GET(...)</code> — matches ~all</td><td>30.1&nbsp;ms</td><td>~23&nbsp;ms</td><td>&minus;24%</td></tr>
+            <tr><td><code>GROUPBY(...) | GET(...)</code></td><td>61.1&nbsp;ms</td><td>~51&nbsp;ms</td><td>&minus;16%</td></tr>
+          </tbody>
+        </table>
+        <p class="muted">
+          Same Amdahl's-Law story as <code>AVERAGE</code>, told twice more: the match-nothing
+          <code>FILTER</code> is compute-bound (evaluate-and-discard, no copies) and comes close
+          to a clean core-count speedup; the match-everything <code>FILTER</code> and
+          <code>GROUPBY</code> still have to copy nearly every surviving record, so they're
+          memory-bandwidth-bound and improve only sub-linearly — real, but not proportional to
+          thread count.
+        </p>
+
+        <h3>SORT comparator simplification <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Javier</span></h3>
+        <p class="muted">
+          <code>SORT DESC</code>'s comparator used to compute "<code>a &lt; b</code>" and then
+          <em>also</em> "<code>a == b</code>", combining them as "not less and not equal" to
+          express "greater" — two comparisons where <code>compareValues(a, Gt, b)</code> says
+          the same thing directly in one. Ascending was already a single comparison; descending
+          now is too — halving the comparator cost across all <code>O(n log n)</code>
+          comparisons <code>stable_sort</code> makes (~1.4 million of them at 85k records). The
+          effect is small for a numeric sort key like <code>gpa</code> (a bare
+          <code>double</code> comparison was already cheap either way), but the same fix would
+          matter more for a descending sort on a <em>string</em> field, where the removed
+          <code>valuesEqual</code> call would otherwise trigger real string-unescaping
+          allocations on every comparison instead of a bare <code>&gt;</code>.
+        </p>
+
         <h3>Number validation — reverted, worth revisiting <span class="status planned">revisit</span></h3>
         <p class="muted">
           A hand-rolled, allocation-free digit-by-digit validator briefly replaced
@@ -1221,21 +1346,85 @@ function evaluate(node, record):        # expression-tree evaluation, used by FI
         </p>
 
         <div class="callout">
-          <strong>Not yet optimized:</strong> <code>excecuteQuery()</code> still deep-copies the
-          <em>entire</em> uploaded document into <code>current</code> at the start of every
-          query (<code>JSONValue current = session.file;</code>), even for a query that only
-          needs one field. <code>FILTER</code> / <code>SORT</code> / <code>GROUPBY</code> still
-          copy every matching/kept <code>JSONValue</code> into a new array at each stage,
-          instead of carrying indices until the very end. <code>groupKeyText()</code> and
+          <strong>Not yet optimized:</strong> <code>groupKeyText()</code> and
           <code>formatValue()</code> still build numbers through <code>ostringstream</code>
           rather than <code>to_chars</code>, and <code>formatValue()</code> still returns a new
-          <code>string</code> per nesting level instead of appending into one shared buffer.
+          <code>string</code> per nesting level instead of appending into one shared buffer — a
+          diagnostic run isolating format cost from stage cost (run each stage once with its
+          full output, once piped into a cheap narrowing tail) found that <code>formatValue()</code>
+          alone costs <strong>~430&ndash;440&nbsp;ms</strong> to print the full 85k-record
+          result, regardless of which stage produced it — more than parsing the entire
+          50&nbsp;MB file, and more than any single query stage measured this sprint. That makes
+          it the largest remaining single cost in the system, and the clearest next target.
           <code>get()</code>'s object lookup is still a linear scan (allocation-free in the
           common case, but still <code>O(object width)</code>, not <code>O(1)</code>) — fine at
-          typical object sizes. Only <code>AVERAGE</code> is parallelized;
-          <code>FILTER</code> and <code>GROUPBY</code> are single-threaded and would fit the
-          same map/partition/merge shape. Full detail in <a href="#limitations">Limitations</a>.
+          typical object sizes. Full detail in <a href="#limitations">Limitations</a>.
         </div>
+
+        <h3>Explored, not attempted this sprint</h3>
+        <p class="muted">
+          Two real gaps, deliberately left for later rather than risked this close to
+          submission:
+        </p>
+        <ul class="muted">
+          <li>
+            <strong><code>GROUPBY</code> on a numeric field still formats a key through
+            <code>ostringstream</code> once per <em>record</em>, not once per
+            <em>group</em>.</strong> <code>groupKeyText()</code>'s string branch — the one this
+            sprint's <code>GROUPBY</code> benchmark actually exercises, since
+            <code>"major"</code> is a string field — is already just a copy, so parallelizing
+            <code>GROUPBY</code> didn't need to touch it, and confirms this gap moves nothing on
+            the current suite. But a numeric <code>GROUPBY</code> target (e.g. the README's own
+            <code>GROUPBY(GET("a"))</code> example) still pays a full <code>ostringstream</code>
+            construction for every record just to decide which bucket it belongs to. Not
+            attempted because it doesn't affect any query in the current benchmark suite, and
+            touching the grouping hot path again this close to submission wasn't worth the risk
+            for an untested gain — but three different ways to actually fix it, in order of how
+            much each one buys vs. costs:
+            <ol style="margin-top:0.5rem;">
+              <li><strong>Key the map on the native type.</strong> Replace
+                <code>unordered_map&lt;string, size_t&gt;</code> with
+                <code>unordered_map&lt;variant&lt;string, double, bool, nullptr_t&gt;, size_t&gt;</code>
+                plus a small custom hash/equality pair. Grouping then hashes and compares the
+                record's actual value directly — no text involved — and a numeric key only
+                becomes a <code>string</code> once, when the final <code>ObjectValue</code> is
+                built (JSON object keys must be strings either way). This is the real fix —
+                <code>O(records)</code> conversions become <code>O(groups)</code> — and also the
+                biggest diff: a new key type, a hand-written hash functor, and it touches
+                <code>GROUPBY</code>'s core data structure rather than something adjacent to it.</li>
+              <li><strong>Keep the <code>string</code> key, swap <code>ostringstream</code> for
+                <code>to_chars</code>.</strong> Doesn't fix the <em>count</em> of conversions
+                (still once per record) — just makes each one cheaper, the same trade already
+                made everywhere else in this sprint. Smallest diff, smallest win; worth doing
+                the same day <code>formatValue()</code>'s number formatting gets the same
+                treatment, since it's the identical fix at one more call site.</li>
+              <li><strong>Sort-based grouping instead of hash-based.</strong> Sort records by key
+                first (reusing <code>SORT</code>'s existing Schwartzian-transform machinery),
+                then one linear pass collecting contiguous runs of equal keys, formatting the key
+                text once per run boundary. This is the classic sort-merge-vs-hash-based
+                <code>GROUP BY</code> distinction database engines choose between — it also gets
+                to "format once per group," through a different mechanism entirely, but trades
+                the current hash map's <code>O(n)</code>-average grouping for
+                <code>O(n log n)</code> sorting just to fix a formatting cost. Worse trade than
+                option 1 here, but the textbook "other answer" to the same problem.</li>
+            </ol>
+          </li>
+          <li>
+            <strong>Deferring materialization all the way through formatting, not just through
+            the pipeline.</strong> Every stage above now builds a real, owned
+            <code>JSONValue</code> array/object later, and for fewer records, than before — but
+            it still builds one. The further step would carry a base pointer and surviving
+            indices all the way to the output-writing step and format directly from wherever
+            records already live, never materializing an intermediate owned copy for the common
+            case. Deliberately not attempted: <code>get()</code>, <code>formatResult()</code>,
+            and <code>LookupResult</code> are public API (<code>query-engine.h</code>) that
+            <code>tests.cpp</code> calls directly, so this would mean either a second, private
+            formatting path used only internally, or changing that public contract — a real
+            design decision with real risk, not a mechanical follow-on, and exactly the kind of
+            structural change worth naming as future work instead of attempting in the final
+            week.
+          </li>
+        </ul>
       </section>
 
       <section id="references">
@@ -1271,6 +1460,32 @@ function evaluate(node, record):        # expression-tree evaluation, used by FI
             — why the parallel <code>AVERAGE</code> reduction's measured speedup falls short
             of a naive <code>n/p</code> estimate: part of the remaining time is memory-bound
             tree traversal, not parallelizable arithmetic.
+          </li>
+          <li>
+            <strong>MapReduce, formally</strong> —
+            Dean, J. and Ghemawat, S., <em>"MapReduce: Simplified Data Processing on Large
+            Clusters,"</em> OSDI 2004 — the same map/partition/merge shape used for
+            <code>AVERAGE</code>, <code>FILTER</code>, and <code>GROUPBY</code> here is a small,
+            single-machine instance of the map-then-reduce pattern this paper formalizes;
+            <code>GROUPBY</code>'s per-thread local maps merged by key in the reduce step is the
+            closest match to the paper's own shuffle/reduce phase.
+          </li>
+          <li>
+            <strong>Hash-based vs. sort-based aggregation</strong> —
+            Garcia-Molina, Ullman, and Widom, <em>Database Systems: The Complete Book</em>,
+            chapter on query execution/grouping — the classical database-systems framing behind
+            the three ways considered for fixing <code>GROUPBY</code>'s numeric-key formatting
+            cost (see <a href="#optimizations">Optimizations &amp; Refactoring</a>): a hash-based
+            <code>GROUP BY</code> (what this codebase uses) versus a sort-based one, and the
+            work/complexity trade-off between them.
+          </li>
+          <li>
+            <strong><code>std::from_chars</code> grammar</strong> —
+            <a href="https://en.cppreference.com/w/cpp/utility/from_chars">cppreference:
+            std::from_chars</a> — the reference for exactly which integer grammar
+            <code>from_chars</code> accepts, and why it differs from <code>stoi</code>/<code>strtol</code>
+            (no leading <code>+</code>) — the detail that surfaced when the fourth
+            <code>stoi</code>→<code>from_chars</code> conversion was tried and then reverted.
           </li>
         </ul>
       </section>
@@ -1416,10 +1631,11 @@ cmake --build build
         <h2>Limitations</h2>
         <p class="muted">What the current implementation doesn't do, or doesn't do well yet — as of the state on <code>main</code> referenced throughout this page.</p>
         <ul>
-          <li><strong>Every query copies the whole document up front.</strong> <code>excecuteQuery()</code> deep-copies the entire uploaded <code>JSONValue</code> into <code>current</code> before running any stage, even a single-field <code>GET</code>. On a very large document this dominates small-query latency.</li>
-          <li><strong><code>FILTER</code>/<code>SORT</code>/<code>GROUPBY</code> copy every kept record.</strong> Each stage builds a fresh array of full <code>JSONValue</code> copies rather than carrying indices/pointers and materializing once at the end.</li>
-          <li><strong>Only <code>AVERAGE</code> is parallelized.</strong> <code>FILTER</code> and <code>GROUPBY</code> run single-threaded even on inputs large enough that the same map/partition/merge approach would help.</li>
+          <li><strong><code>formatValue()</code> is the largest remaining cost in the system.</strong> Printing a full 85k-record result costs ~430&ndash;440&nbsp;ms on its own — more than parsing the 50&nbsp;MB file, and more than any single query stage. It still returns a new <code>string</code> per nesting level and formats numbers through <code>ostringstream</code> rather than <code>to_chars</code>. See <a href="#optimizations">Optimizations &amp; Refactoring</a>.</li>
+          <li><strong>Materialization happens per-stage, not deferred all the way to formatting.</strong> The query-start deep copy and the per-stage "copy everything, matched or not" problem are both fixed — <code>FILTER</code>/<code>SORT</code>/<code>LIMIT</code>/<code>GROUPBY</code> only ever touch a record once it's already known to survive. But each stage that keeps records still builds a real, owned array rather than carrying indices through to the final format step — a bigger structural change, explored but deliberately left for later (see <a href="#optimizations">Optimizations &amp; Refactoring</a>).</li>
+          <li><strong><code>GROUPBY</code> on a numeric field still pays per-record key formatting.</strong> Fine for the string-keyed <code>major</code> field this sprint's benchmark exercises; a numeric <code>GROUPBY</code> target still formats a key via <code>ostringstream</code> once per record instead of once per distinct group.</li>
           <li><strong>Number validation currently goes through <code>&lt;regex&gt;</code></strong> in both scanners (see <a href="#optimizations">Optimizations &amp; Refactoring</a>) — a faster hand-rolled version exists in the source, commented out, but isn't wired back in.</li>
+          <li><strong><code>get()</code>'s array-index parsing still uses <code>stoi</code> — kept intentionally, not an oversight.</strong> Tried switching it to <code>from_chars</code> along with the other three sites; tracing every hot-loop call site showed this branch never runs per-record for any query in the suite (it only fires for the handful of literal-index <code>GET(...)</code> calls at the end of a query), so the swap moved nothing on the benchmark, and it changed accepted syntax (<code>from_chars</code> rejects a leading <code>+</code> that <code>stoi</code> accepted) for no measured benefit. Reverted. See <a href="#optimizations">Optimizations &amp; Refactoring</a>.</li>
           <li><strong><code>get()</code>'s field lookup is a linear scan</strong> over an object's keys — <code>O(object width)</code>, not <code>O(1)</code>. Fine at the object widths in our test/benchmark data; would need revisiting for very wide objects.</li>
           <li><strong>Output only goes to <code>stdout</code>.</strong> There's no flag to write a query's result to a file — piping/redirecting the shell's own output is the only option today.</li>
           <li><strong><a href="#feat-filter-average">Filter by Average</a> only works one level of nesting deep.</strong> <code>FILTER(AVERAGE(...) &gt; x)</code> requires the value being tested per-record to itself be a numeric array (or an array of objects, for the <code>GET(...)</code> form) — against a flat array of plain records it silently matches nothing rather than erroring.</li>
@@ -1509,7 +1725,7 @@ cmake --build build       # (re)build — only recompiles what changed
               <li>Designed and built <code>QueryScanner</code>/<code>QueryParser</code> — the tokenizer and recursive-descent grammar for the query language, including <code>AND</code>/<code>OR</code> and <code>AVERAGE</code>-as-operand (<a href="#feat-filter-average">Filter by Average</a>)</li>
               <li>Fixed <code>.jsonl</code> parsing/scanning correctness, and rejected trailing content after a top-level scalar</li>
               <li>Replaced both scanners' per-word/per-keyword character chains with static keyword-lookup tables, and <code>stod</code>/<code>stoi</code> with <code>from_chars</code> in the parsers — see <a href="#optimizations">Optimizations</a></li>
-              <li>Removed an extra full-document copy from <code>Session::initialize()</code> via move semantics</li>
+              <li>Removed an extra full-document copy from <code>Session::initialize()</code> via move semantics, and the query-start whole-document copy from <code>excecuteQuery()</code> (see <a href="#optimizations">Optimizations</a>)</li>
             </ul>
           </div>
           <div class="card">
@@ -1520,6 +1736,7 @@ cmake --build build       # (re)build — only recompiles what changed
               <li>Sort-key precomputation and hash-map grouping (see <a href="#optimizations">Optimizations</a>) instead of the naive O(n log n) / O(n·groups) approach</li>
               <li>Found and fixed several crash bugs (type-mismatch comparisons, non-numeric <code>AVERAGE</code>, invalid <code>GROUPBY</code> keys) so bad input fails cleanly instead of taking the program down</li>
               <li>Fast-path key comparison in <code>get()</code> and a parallel reduction for <code>AVERAGE</code> — 40.7ms &rarr; 28.0ms measured query time on the 85k-record benchmark (see <a href="#optimizations">Optimizations</a>)</li>
+              <li>Closed the remaining per-stage copy gap (a match-nothing <code>FILTER</code> was still paying to copy the whole array), then extended the parallel-reduction pattern to <code>FILTER</code> and <code>GROUPBY</code>, and simplified <code>SORT</code>'s descending comparator — see <a href="#optimizations">Optimizations</a> for the before/after numbers</li>
             </ul>
           </div>
           <div class="card">
@@ -1530,6 +1747,7 @@ cmake --build build       # (re)build — only recompiles what changed
               <li>Wired GNU Readline into <code>promptLine()</code> for arrow-key history and in-line editing, with a <code>CMakeLists.txt</code> <code>find_library</code> fallback when it isn't installed</li>
               <li>Colorized <code>PASS</code>/<code>FAIL</code> output for the regression suite (<a href="#testing">Testing</a>)</li>
               <li>CSV export for the benchmark harness (<code>benchmarks/results/&lt;machine&gt;.csv</code>), plus formatting cleanup on the benchmark table itself</li>
+              <li>Upgraded the benchmark suite from one fixed query to a table of named cases (<code>nested_get</code>, <code>average_gpa</code>, <code>filter_none</code>, <code>filter_all</code>, <code>sort_gpa_desc</code>, <code>group_by_major</code>) — the <code>filter_none</code>/<code>filter_all</code> split is exactly what surfaced the per-stage copy gap above</li>
             </ul>
           </div>
         </div>
@@ -1628,7 +1846,7 @@ cmake --build build       # (re)build — only recompiles what changed
             <p>Javier profiled <code>AVERAGE(GET("gpa"))</code> against the 85k-record benchmark, fixed the allocation-heavy key comparison in <code>get()</code>, and parallelized <code>sumField</code>'s reduction across threads — 40.7ms &rarr; 28.0ms measured query time. Full writeup in <a href="#optimizations">Optimizations &amp; Refactoring</a>.</p>
           </div>
 
-          <div class="sprint-label">Sprint 4 (Week 4) — Aug 17&ndash;19</div>
+          <div class="sprint-label">Sprint 4 (Week 4) — Aug 17&ndash;23</div>
 
           <div class="entry">
             <div class="date">Aug 17</div>
@@ -1644,6 +1862,11 @@ cmake --build build       # (re)build — only recompiles what changed
             <div class="date">Aug 19</div>
             <h4>Deep-copy &amp; <code>stoi</code>/<code>stod</code> cleanup, Release-only builds <span class="status done">done</span></h4>
             <p><code>Session::initialize()</code> now moves its arguments instead of copying them; number parsing in the JSON parser, query parser, and <code>LIMIT</code> switched from <code>stod</code>/<code>stoi</code> on a temporary string to <code>std::from_chars</code>. <code>CMakeLists.txt</code> now hardcodes <code>CMAKE_BUILD_TYPE</code> to <code>Release</code>. Merged via PR #73.</p>
+          </div>
+          <div class="entry">
+            <div class="date">Aug 22&ndash;23</div>
+            <h4>Query-start copy fixed, then closed the per-stage gap it left behind <span class="status done">done</span></h4>
+            <p>Ryan's upgraded benchmark suite (named cases including a match-nothing and a match-everything <code>FILTER</code>) surfaced that the query-start deep-copy fix still left every <code>FILTER</code>/<code>SORT</code>/<code>LIMIT</code>/<code>GROUPBY</code> paying to copy the whole array before deciding what to keep. Javier closed that gap (only copy/move a record once it's known to survive), then parallelized <code>FILTER</code> and <code>GROUPBY</code> with the same map/partition/merge shape as <code>AVERAGE</code>, and simplified <code>SORT</code>'s comparator. Full before/after numbers, and two ideas explored but intentionally left for later, in <a href="#optimizations">Optimizations &amp; Refactoring</a>.</p>
           </div>
           <div class="entry planned">
             <div class="date">Before Aug 27</div>
