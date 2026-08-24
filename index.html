@@ -1461,9 +1461,9 @@ function evaluate(node, record):        # expression-tree evaluation, used by FI
         <h2>References &amp; Further Reading</h2>
         <p class="muted">
           Background reading behind the techniques in <a href="#optimizations">Optimizations
-          &amp; Refactoring</a> above — the work-depth/PRAM model, Brent's theorem, and parallel
-          reduction in particular. Fill in with whatever's actually being cited in the
-          presentation.
+          &amp; Refactoring</a> above, cited alongside the specific technique each source
+          informed — the work-depth/PRAM model, Brent's theorem, and parallel reduction in
+          particular.
         </p>
         <ul class="muted">
           <li>
@@ -1471,6 +1471,14 @@ function evaluate(node, record):        # expression-tree evaluation, used by FI
             <a href="https://www.geeksforgeeks.org/dsa/difference-between-average-case-and-amortized-analysis/">GeeksforGeeks: Difference Between Average Case and Amortized Analysis</a>
             — the distinction behind the <code>get()</code> fast-path fix: worst-case
             complexity is unchanged, the win is in the expected/average cost on typical input.
+          </li>
+          <li>
+            <strong>Schwartzian transform</strong> —
+            <a href="https://en.wikipedia.org/wiki/Schwartzian_transform">Wikipedia: Schwartzian transform</a>
+            — the decorate&#8211;sort&#8211;undecorate pattern behind <code>SORT</code>'s key
+            precomputation: compute each record's sort key once up front (decorate), sort by
+            that precomputed key instead of re-deriving it on every comparison (sort), then
+            read off the original records in the new order (undecorate).
           </li>
           <li>
             <strong>Brent's theorem &amp; the PRAM model</strong> —
@@ -1499,6 +1507,23 @@ function evaluate(node, record):        # expression-tree evaluation, used by FI
             single-machine instance of the map-then-reduce pattern this paper formalizes;
             <code>GROUPBY</code>'s per-thread local maps merged by key in the reduce step is the
             closest match to the paper's own shuffle/reduce phase.
+          </li>
+          <li>
+            <strong>MapReduce, in practice</strong> —
+            <a href="https://www.databricks.com/blog/what-is-mapreduce">Databricks: What is MapReduce?</a>
+            — a plainer walkthrough of the same map/shuffle/reduce phases, useful alongside the
+            original paper above for explaining <code>FILTER</code> and <code>GROUPBY</code>'s
+            per-thread map phase (independent local work, no shared state) followed by an
+            ordered single-threaded reduce/merge phase.
+          </li>
+          <li>
+            <strong>Hash maps</strong> —
+            <a href="https://www.w3schools.com/dsa/dsa_data_hashmaps.php">W3Schools: Hash Maps</a>
+            — the bucket/hash-function mechanics behind <code>GROUPBY</code>'s
+            <code>unordered_map</code>-based grouping: a key hashes directly to a bucket
+            instead of being searched for, which is why finding-or-creating a group is O(1)
+            average regardless of how many distinct groups already exist, versus the O(g)
+            linear scan a list-of-groups approach would need per record.
           </li>
           <li>
             <strong>Hash-based vs. sort-based aggregation</strong> —
