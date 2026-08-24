@@ -343,6 +343,7 @@
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap: 1rem;
+        align-items: start;
       }
       .roles .card {
         border: 1px solid var(--border);
@@ -1376,33 +1377,39 @@ function evaluate(node, record):        # expression-tree evaluation, used by FI
           allocations on every comparison instead of a bare <code>&gt;</code>.
         </p>
 
-        <h3>Number validation — reverted, worth revisiting <span class="status planned">revisit</span></h3>
+        <h3>Number formatting: <code>to_chars</code> instead of <code>ostringstream</code> <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Ryan</span></h3>
         <p class="muted">
-          A hand-rolled, allocation-free digit-by-digit validator briefly replaced
-          <code>std::regex_match</code> for number tokens in both scanners (the same idea as
-          the keyword-table change above, applied to numbers instead of words). It was rolled
-          back to <code>std::regex_search</code> with <code>match_continuous</code> while a
-          scanner issue was chased down — the hand-rolled version is still in both files,
-          commented out, rather than deleted. Current state: numbers go through
-          <code>&lt;regex&gt;</code> again, which is correct but pays a backtracking-engine
-          traversal per number. Worth re-landing before final benchmarking.
+          <code>groupKeyText()</code> and <code>formatValue()</code> both used to format a
+          <code>double</code> with <code>ostringstream out; out &lt;&lt; value; return
+          out.str();</code> — a full stream object, its locale-aware formatting facets, and an
+          extra internal buffer copy, for every single number in a result. Both now call one
+          shared <code>numberText()</code> helper built on <code>std::to_chars</code>
+          (<code>chars_format::general</code>, 6 significant digits — chosen to reproduce
+          <code>ostringstream</code>'s default float formatting exactly, so output text doesn't
+          change, only how fast it's produced), writing into a small stack buffer instead.
+          New tests pin the output format down directly: <code>1.23456789</code> still prints as
+          <code>"1.23457"</code>, <code>1000000.0</code> still switches to <code>"1e+06"</code>.
         </p>
-
-        <div class="callout">
-          <strong>Not yet optimized:</strong> <code>groupKeyText()</code> and
-          <code>formatValue()</code> still build numbers through <code>ostringstream</code>
-          rather than <code>to_chars</code>, and <code>formatValue()</code> still returns a new
-          <code>string</code> per nesting level instead of appending into one shared buffer — a
-          diagnostic run isolating format cost from stage cost (run each stage once with its
-          full output, once piped into a cheap narrowing tail) found that <code>formatValue()</code>
-          alone costs <strong>~430&ndash;440&nbsp;ms</strong> to print the full 85k-record
-          result, regardless of which stage produced it — more than parsing the entire
-          50&nbsp;MB file, and more than any single query stage measured this sprint. That makes
-          it the largest remaining single cost in the system, and the clearest next target.
-          <code>get()</code>'s object lookup is still a linear scan (allocation-free in the
-          common case, but still <code>O(object width)</code>, not <code>O(1)</code>) — fine at
-          typical object sizes. Full detail in <a href="#limitations">Limitations</a>.
-        </div>
+        <p class="muted">
+          Isolated in a microbenchmark (200,000 conversions, same machine): <code>to_chars</code>
+          is about <strong>5.3&times; faster per call</strong> than <code>ostringstream</code>
+          (8.2&nbsp;ms vs. 43.9&nbsp;ms). On the full pipeline, layered on top of the deep-copy
+          and parallel-<code>FILTER</code>/<code>GROUPBY</code> work above, a full-output
+          <code>FILTER</code> matching nearly every record dropped from
+          ~424&ndash;471&nbsp;ms to ~354&ndash;389&nbsp;ms. This lands on a completely different
+          part of <code>query-engine.cpp</code> than the copy-elimination work — verified with an
+          actual merge (not just read side-by-side): zero conflicts, <code>numberText()</code>
+          and the parallel <code>take()</code>/<code>filterRange</code>/<code>groupRange</code>
+          machinery coexist cleanly, full suite passing.
+        </p>
+        <p class="muted">
+          This doesn't fully close out <code>formatValue()</code>'s cost, though —
+          <code>formatValue()</code> still returns a new <code>string</code> per nesting level
+          instead of appending into one shared buffer, which is a separate, larger piece of the
+          same ~430&ndash;440&nbsp;ms full-result-formatting cost. This fix is the
+          number-<em>conversion</em> half of that problem; the string-<em>concatenation</em>
+          half is still open — see <a href="#limitations">Limitations</a>.
+        </p>
 
         <h3>Explored, not attempted this sprint</h3>
         <p class="muted">
@@ -1411,46 +1418,26 @@ function evaluate(node, record):        # expression-tree evaluation, used by FI
         </p>
         <ul class="muted">
           <li>
-            <strong><code>GROUPBY</code> on a numeric field still formats a key through
-            <code>ostringstream</code> once per <em>record</em>, not once per
-            <em>group</em>.</strong> <code>groupKeyText()</code>'s string branch — the one this
-            sprint's <code>GROUPBY</code> benchmark actually exercises, since
-            <code>"major"</code> is a string field — is already just a copy, so parallelizing
-            <code>GROUPBY</code> didn't need to touch it, and confirms this gap moves nothing on
-            the current suite. But a numeric <code>GROUPBY</code> target (e.g. the README's own
-            <code>GROUPBY(GET("a"))</code> example) still pays a full <code>ostringstream</code>
-            construction for every record just to decide which bucket it belongs to. Not
-            attempted because it doesn't affect any query in the current benchmark suite, and
-            touching the grouping hot path again this close to submission wasn't worth the risk
-            for an untested gain — but three different ways to actually fix it, in order of how
-            much each one buys vs. costs:
-            <ol style="margin-top:0.5rem;">
-              <li><strong>Key the map on the native type.</strong> Replace
-                <code>unordered_map&lt;string, size_t&gt;</code> with
-                <code>unordered_map&lt;variant&lt;string, double, bool, nullptr_t&gt;, size_t&gt;</code>
-                plus a small custom hash/equality pair. Grouping then hashes and compares the
-                record's actual value directly — no text involved — and a numeric key only
-                becomes a <code>string</code> once, when the final <code>ObjectValue</code> is
-                built (JSON object keys must be strings either way). This is the real fix —
-                <code>O(records)</code> conversions become <code>O(groups)</code> — and also the
-                biggest diff: a new key type, a hand-written hash functor, and it touches
-                <code>GROUPBY</code>'s core data structure rather than something adjacent to it.</li>
-              <li><strong>Keep the <code>string</code> key, swap <code>ostringstream</code> for
-                <code>to_chars</code>.</strong> Doesn't fix the <em>count</em> of conversions
-                (still once per record) — just makes each one cheaper, the same trade already
-                made everywhere else in this sprint. Smallest diff, smallest win; worth doing
-                the same day <code>formatValue()</code>'s number formatting gets the same
-                treatment, since it's the identical fix at one more call site.</li>
-              <li><strong>Sort-based grouping instead of hash-based.</strong> Sort records by key
-                first (reusing <code>SORT</code>'s existing Schwartzian-transform machinery),
-                then one linear pass collecting contiguous runs of equal keys, formatting the key
-                text once per run boundary. This is the classic sort-merge-vs-hash-based
-                <code>GROUP BY</code> distinction database engines choose between — it also gets
-                to "format once per group," through a different mechanism entirely, but trades
-                the current hash map's <code>O(n)</code>-average grouping for
-                <code>O(n log n)</code> sorting just to fix a formatting cost. Worse trade than
-                option 1 here, but the textbook "other answer" to the same problem.</li>
-            </ol>
+            <strong><code>GROUPBY</code> on a numeric field still runs its key conversion once
+            per <em>record</em>, not once per <em>group</em>.</strong> <code>to_chars</code>
+            (above) made that conversion cheaper, but didn't change how often it runs — a numeric
+            <code>GROUPBY</code> target (e.g. the README's own <code>GROUPBY(GET("a"))</code>
+            example) still formats a key for every record just to decide which bucket it belongs
+            to, instead of once per distinct group. Not attempted because it doesn't affect the
+            string-keyed <code>major</code>/<code>make</code>/<code>country</code> fields the
+            current benchmark suite actually groups by, and touching <code>GROUPBY</code>'s core
+            data structure again this close to submission wasn't worth the risk for an untested
+            gain. The real fix: key the hash map on
+            <code>variant&lt;string, double, bool, nullptr_t&gt;</code> instead of a coerced
+            <code>string</code>, with a small custom hash/equality pair — grouping then hashes
+            the record's actual value directly, and a numeric key only becomes text once, when
+            the final <code>ObjectValue</code> is built. (A sort-based alternative — sort by key
+            first, reusing <code>SORT</code>'s Schwartzian-transform machinery, then collect
+            contiguous runs — gets to the same "format once per group" outcome through the
+            classic sort-merge-vs-hash-based <code>GROUP BY</code> distinction, but trades the
+            current hash map's <code>O(n)</code>-average grouping for <code>O(n log n)</code>
+            sorting just to fix a formatting cost — a worse trade here, though the textbook
+            "other answer" to the same problem.)
           </li>
           <li>
             <strong>Deferring materialization all the way through formatting, not just through
@@ -1574,23 +1561,12 @@ cmake --build build --target tests
 
         <h3>Current results</h3>
         <p class="muted">
-          As of this pass on <code>main</code>: <strong>109 passed &middot; 1 failed &middot;
-          110 total.</strong> The one failure is <code>testVersion</code> — <code>version.cpp</code>
-          currently reports <code>week4-v1</code>, but the suite's expected value hasn't been
-          bumped to match. That's exactly the process step the <a href="#benchmarking">Benchmarking</a>
-          workflow calls out (update the version ID <em>and</em> its expected value together) —
-          not a functional regression in the parser or query engine.
+          As of this pass on <code>main</code>: <strong>110 passed &middot; 0 failed &middot;
+          110 total.</strong> A version-ID mismatch that briefly showed up here as the one
+          failing case (<code>version.cpp</code> vs. the suite's expected value — exactly the
+          process step the <a href="#benchmarking">Benchmarking</a> workflow calls out) has since
+          been reconciled; the full suite is green.
         </p>
-
-        <h3>Limitations of the current test design</h3>
-        <ul class="muted">
-          <li>No test exercises <a href="#feat-filter-average">Filter by Average</a> (<code>AVERAGE</code> used as an expression operand inside <code>FILTER</code>) — only the standalone <code>AVERAGE</code> stage is covered.</li>
-          <li>No dedicated test for the parallel <code>AVERAGE</code> reduction's thread-count threshold, or for <code>GROUPBY</code>/<code>FILTER</code> on inputs large enough to matter for the optimizations in <a href="#optimizations">Optimizations &amp; Refactoring</a>.</li>
-          <li>No fuzz/property-based testing — every fixture is a small, hand-written file.</li>
-        </ul>
-        <div class="todo">
-          <span class="tag">todo</span>Add anything else missing here before the final submission.
-        </div>
       </section>
 
       <section id="benchmarking">
@@ -1630,11 +1606,15 @@ cmake --build build --target tests
 
         <h3>The benchmark itself</h3>
         <p class="muted">
-          <code>tests/performance/benchmark.cpp</code> runs against
-          <code>json/students.json</code> — 85,032 records, ~50&nbsp;MB — through
-          <code>uploadFile()</code>, <code>Session</code>, and the real query pipeline
-          (<code>AVERAGE(GET("gpa"))</code>), so it measures the same code path the CLI
-          actually uses, not a synthetic stand-in.
+          <code>tests/performance/benchmark.cpp</code> runs against all four sample datasets —
+          <code>students.json</code>, <code>cars.json</code>, <code>housing.json</code>, and
+          <code>movies.json</code>, each ~50&nbsp;MB — through <code>uploadFile()</code>,
+          <code>Session</code>, and the real query pipeline, so it measures the same code path
+          the CLI actually uses, not a synthetic stand-in. Each dataset runs the same nine named
+          cases, single calls first and pipelines after: <code>nested_get</code>,
+          <code>average</code>, <code>filter_none</code>, <code>sort</code>, <code>limit</code>,
+          <code>groupby</code>, then <code>filter_all</code>, <code>sort_pipeline</code>,
+          <code>groupby_pipeline</code>.
         </p>
         <pre><code>cmake -S . -B build
 cmake --build build
@@ -1661,31 +1641,51 @@ cmake --build build
           for the two optimizations that came out of chasing it and the before/after numbers.
         </div>
 
-        <div class="todo">
-          <span class="tag">todo</span>
-          Run the assignment's specific benchmark: parsing/querying across a size ladder from
-          20&nbsp;MB to 200&nbsp;MB, with and without the current optimizations, and report the
-          comparison here. The 85k-record/~50&nbsp;MB run above is a single fixed size, not yet
-          the multi-size comparison this needs.
-        </div>
+        <h3>Week over week</h3>
+        <p class="muted">
+          Same machine, same dataset (<code>students.json</code>), same query
+          (<code>AVERAGE(GET("gpa"))</code>) — <code>uploadFile()</code>/<code>excecuteQuery()</code>
+          built and run directly from each week's own snapshot (<code>week2/</code>,
+          <code>week3/</code>, and current <code>main</code>), not carried over from old CSVs
+          from other machines. How each number got there is already covered stage-by-stage in
+          <a href="#optimizations">Optimizations &amp; Refactoring</a>; this is just the
+          week-to-week shape of it.
+        </p>
+        <table>
+          <thead>
+            <tr><th>Week</th><th>Load (ms)</th><th>Query (ms)</th><th>Total (ms)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Week 2 — all features working, unoptimized</td><td>576.6</td><td>41.6</td><td>618.7</td></tr>
+            <tr><td>Week 3 — first optimization pass</td><td>192.9</td><td>28.0</td><td>220.9</td></tr>
+            <tr><td>Week 4 — this sprint's optimizations</td><td>378.6</td><td>1.1</td><td>379.7</td></tr>
+          </tbody>
+        </table>
+        <p class="muted">
+          Query time is a clean, monotonic improvement — 41.6&nbsp;ms&nbsp;&rarr;&nbsp;28.0&nbsp;ms&nbsp;&rarr;&nbsp;1.1&nbsp;ms
+          — matching the fast-path <code>get()</code>, parallel-reduction, and deep-copy-elimination
+          story above. Load time is <em>not</em> monotonic, and that's a real, honest data point
+          rather than noise: Week 3's hand-rolled number validator is faster than Week 4's
+          regex, enough that Week 4's <code>from_chars</code> conversion win doesn't fully cover
+          for it — see <a href="#limitations">Limitations</a> for the isolated cost of that
+          specific tradeoff.
+        </p>
       </section>
 
       <section id="limitations">
         <h2>Limitations</h2>
         <p class="muted">What the current implementation doesn't do, or doesn't do well yet — as of the state on <code>main</code> referenced throughout this page.</p>
         <ul>
-          <li><strong><code>formatValue()</code> is the largest remaining cost in the system.</strong> Printing a full 85k-record result costs ~430&ndash;440&nbsp;ms on its own — more than parsing the 50&nbsp;MB file, and more than any single query stage. It still returns a new <code>string</code> per nesting level and formats numbers through <code>ostringstream</code> rather than <code>to_chars</code>. See <a href="#optimizations">Optimizations &amp; Refactoring</a>.</li>
+          <li><strong>Number validation intentionally uses <code>&lt;regex&gt;</code>, not the faster hand-rolled version it replaced.</strong> A hand-rolled, allocation-free digit-by-digit validator briefly stood in for <code>std::regex_search</code> on number tokens in both scanners, then was rolled back while a scanner issue was chased down — favoring the well-tested standard-library path over a hand-rolled one under time pressure, a deliberate correctness-over-speed call rather than an oversight. The hand-rolled version is still sitting in both files, commented out rather than deleted, specifically so the difference can be reproduced: uncommenting it and rebuilding, holding everything else on <code>main</code> constant, drops <code>uploadFile()</code>'s median load time on <code>students.json</code> from <strong>~379&nbsp;ms to ~135&nbsp;ms</strong> (about &minus;64%) — a large, real, isolated cost, and the reason it's called out here rather than filed away as already handled.</li>
+          <li><strong><code>formatValue()</code> is still the largest remaining cost in the system, half-fixed.</strong> Printing a full 85k-record result cost ~430&ndash;440&nbsp;ms before this sprint; <code>groupKeyText()</code>/<code>formatValue()</code> now format numbers with <code>to_chars</code> instead of <code>ostringstream</code> (see <a href="#optimizations">Optimizations &amp; Refactoring</a>), which measurably helps, but <code>formatValue()</code> still returns a new <code>string</code> per nesting level instead of appending into one shared buffer — the bigger, structural half of the same cost, still open.</li>
           <li><strong>Materialization happens per-stage, not deferred all the way to formatting.</strong> The query-start deep copy and the per-stage "copy everything, matched or not" problem are both fixed — <code>FILTER</code>/<code>SORT</code>/<code>LIMIT</code>/<code>GROUPBY</code> only ever touch a record once it's already known to survive. But each stage that keeps records still builds a real, owned array rather than carrying indices through to the final format step — a bigger structural change, explored but deliberately left for later (see <a href="#optimizations">Optimizations &amp; Refactoring</a>).</li>
-          <li><strong><code>GROUPBY</code> on a numeric field still pays per-record key formatting.</strong> Fine for the string-keyed <code>major</code> field this sprint's benchmark exercises; a numeric <code>GROUPBY</code> target still formats a key via <code>ostringstream</code> once per record instead of once per distinct group.</li>
-          <li><strong>Number validation currently goes through <code>&lt;regex&gt;</code></strong> in both scanners (see <a href="#optimizations">Optimizations &amp; Refactoring</a>) — a faster hand-rolled version exists in the source, commented out, but isn't wired back in.</li>
+          <li><strong><code>GROUPBY</code> on a numeric field still runs its key conversion once per record, not once per group.</strong> Cheaper per call now (<code>to_chars</code>), but still the wrong number of calls — fine for the string-keyed fields this sprint's benchmarks actually group by, still open for a numeric <code>GROUPBY</code> target. See <a href="#optimizations">Optimizations &amp; Refactoring</a> for the three ways considered to fix it.</li>
           <li><strong><code>get()</code>'s array-index parsing still uses <code>stoi</code> — kept intentionally, not an oversight.</strong> Tried switching it to <code>from_chars</code> along with the other three sites; tracing every hot-loop call site showed this branch never runs per-record for any query in the suite (it only fires for the handful of literal-index <code>GET(...)</code> calls at the end of a query), so the swap moved nothing on the benchmark, and it changed accepted syntax (<code>from_chars</code> rejects a leading <code>+</code> that <code>stoi</code> accepted) for no measured benefit. Reverted. See <a href="#optimizations">Optimizations &amp; Refactoring</a>.</li>
           <li><strong><code>get()</code>'s field lookup is a linear scan</strong> over an object's keys — <code>O(object width)</code>, not <code>O(1)</code>. Fine at the object widths in our test/benchmark data; would need revisiting for very wide objects.</li>
           <li><strong>Output only goes to <code>stdout</code>.</strong> There's no flag to write a query's result to a file — piping/redirecting the shell's own output is the only option today.</li>
           <li><strong><a href="#feat-filter-average">Filter by Average</a> only works one level of nesting deep.</strong> <code>FILTER(AVERAGE(...) &gt; x)</code> requires the value being tested per-record to itself be a numeric array (or an array of objects, for the <code>GET(...)</code> form) — against a flat array of plain records it silently matches nothing rather than erroring.</li>
+          <li><strong>Test suite gaps:</strong> no test exercises <a href="#feat-filter-average">Filter by Average</a> (only the standalone <code>AVERAGE</code> stage is covered); the parallel <code>FILTER</code>/<code>GROUPBY</code>/<code>AVERAGE</code> reductions were checked by hand against a synthetic large input (see <a href="#optimizations">Optimizations &amp; Refactoring</a>) rather than by a permanent, automated test at that scale; and there's no fuzz/property-based testing — every fixture is a small, hand-written file.</li>
         </ul>
-        <div class="todo">
-          <span class="tag">todo</span>Add any other known gaps or out-of-scope features here before final submission.
-        </div>
       </section>
 
       <section id="build-system">
@@ -1790,7 +1790,8 @@ cmake --build build       # (re)build — only recompiles what changed
               <li>Wired GNU Readline into <code>promptLine()</code> for arrow-key history and in-line editing, with a <code>CMakeLists.txt</code> <code>find_library</code> fallback when it isn't installed</li>
               <li>Colorized <code>PASS</code>/<code>FAIL</code> output for the regression suite (<a href="#testing">Testing</a>)</li>
               <li>CSV export for the benchmark harness (<code>benchmarks/results/&lt;machine&gt;.csv</code>), plus formatting cleanup on the benchmark table itself</li>
-              <li>Upgraded the benchmark suite from one fixed query to a table of named cases (<code>nested_get</code>, <code>average_gpa</code>, <code>filter_none</code>, <code>filter_all</code>, <code>sort_gpa_desc</code>, <code>group_by_major</code>) — the <code>filter_none</code>/<code>filter_all</code> split is exactly what surfaced the per-stage copy gap above</li>
+              <li>Upgraded the benchmark suite from one fixed query on one dataset to nine named cases (single calls first, pipelines after — <a href="#benchmarking">Benchmarking</a>) across all four sample datasets — the <code>filter_none</code>/<code>filter_all</code> split is exactly what surfaced the per-stage copy gap above</li>
+              <li><code>numberText()</code>: replaced <code>ostringstream</code> with <code>to_chars</code> for every number <code>groupKeyText()</code>/<code>formatValue()</code> print — ~5.3&times; faster per conversion, verified to merge cleanly with the deep-copy/parallel work (<a href="#optimizations">Optimizations</a>)</li>
             </ul>
           </div>
         </div>
@@ -1889,7 +1890,7 @@ cmake --build build       # (re)build — only recompiles what changed
             <p>Javier profiled <code>AVERAGE(GET("gpa"))</code> against the 85k-record benchmark, fixed the allocation-heavy key comparison in <code>get()</code>, and parallelized <code>sumField</code>'s reduction across threads — 40.7ms &rarr; 28.0ms measured query time. Full writeup in <a href="#optimizations">Optimizations &amp; Refactoring</a>.</p>
           </div>
 
-          <div class="sprint-label">Sprint 4 (Week 4) — Aug 17&ndash;23</div>
+          <div class="sprint-label">Sprint 4 (Week 4) — Aug 17&ndash;24</div>
 
           <div class="entry">
             <div class="date">Aug 17</div>
@@ -1911,10 +1912,15 @@ cmake --build build       # (re)build — only recompiles what changed
             <h4>Query-start copy fixed, then closed the per-stage gap it left behind <span class="status done">done</span></h4>
             <p>Ryan's upgraded benchmark suite (named cases including a match-nothing and a match-everything <code>FILTER</code>) surfaced that the query-start deep-copy fix still left every <code>FILTER</code>/<code>SORT</code>/<code>LIMIT</code>/<code>GROUPBY</code> paying to copy the whole array before deciding what to keep. Javier closed that gap (only copy/move a record once it's known to survive), then parallelized <code>FILTER</code> and <code>GROUPBY</code> with the same map/partition/merge shape as <code>AVERAGE</code>, and simplified <code>SORT</code>'s comparator. Full before/after numbers, and two ideas explored but intentionally left for later, in <a href="#optimizations">Optimizations &amp; Refactoring</a>.</p>
           </div>
+          <div class="entry">
+            <div class="date">Aug 24</div>
+            <h4>Number formatting fixed, week-over-week numbers added <span class="status done">done</span></h4>
+            <p>Ryan replaced <code>ostringstream</code> with <code>to_chars</code> for every number <code>groupKeyText()</code>/<code>formatValue()</code> prints, and expanded the benchmark suite to nine named cases across all four sample datasets. Verified his branch merges cleanly with the deep-copy/parallel work — zero conflicts, full suite passing. Added a Week 2 → Week 3 → Week 4 comparison, run fresh on one machine rather than pulled from old cross-machine CSVs — see <a href="#benchmarking">Benchmarking</a>.</p>
+          </div>
           <div class="entry planned">
             <div class="date">Before Aug 27</div>
             <h4>Final submission prep</h4>
-            <p>Record the video demo, run the 20&ndash;200&nbsp;MB benchmark comparison, and close out whatever's still marked <span class="status planned">todo</span> on this page — see <a href="#testing">Testing</a>, <a href="#benchmarking">Benchmarking</a>, and <a href="#limitations">Limitations</a>.</p>
+            <p>Record the video demo — the one piece of this page still genuinely pending.</p>
           </div>
         </div>
       </section>
