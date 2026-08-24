@@ -4,6 +4,7 @@
 #include "query-engine.h"
 
 #include <algorithm>
+#include <charconv>
 #include <thread>
 #include <unordered_map>
 
@@ -101,6 +102,15 @@ bool requireBoolean(const JSONValue& value) {
     return get<bool>(value.getValue());
 }
 
+string numberText(double value) {
+    char buffer[64];
+    auto result = to_chars(buffer, buffer + sizeof(buffer), value, chars_format::general, 6);
+    if (result.ec != errc{}) {
+        throw runtime_error("could not format number");
+    }
+    return string(buffer, result.ptr);
+}
+
 // Sums a numeric field across `arr`, skipping records missing the field.
 // Returns {sum, count}; count == 0 means no usable values were found.
 pair<double, size_t> sumField(const ArrayValue& arr, const vector<string_view>& path);
@@ -164,11 +174,8 @@ string groupKeyText(const JSONValue& value) {
             return get<bool>(value.getValue()) ? "true" : "false";
         case ValueType::Null:
             return "null";
-        case ValueType::Number: {
-            ostringstream out;
-            out << get<double>(value.getValue());
-            return out.str();
-        }
+        case ValueType::Number:
+            return numberText(get<double>(value.getValue()));
         default:
             throw runtime_error("can't group by an array or object field");
     }
@@ -530,11 +537,8 @@ string formatValue(const JSONValue& value, int depth = 0) {
             return "null";
         case ValueType::Boolean:
             return get<bool>(value.getValue()) ? "true" : "false";
-        case ValueType::Number: {
-            ostringstream out;
-            out << get<double>(value.getValue());
-            return out.str();
-        }
+        case ValueType::Number:
+            return numberText(get<double>(value.getValue()));
         case ValueType::String:
             return "\"" + get<string>(value.getValue()) + "\"";
         case ValueType::Object: {

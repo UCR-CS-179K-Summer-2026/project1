@@ -340,6 +340,10 @@ void testLookup() {
     section("how results get printed");
     check(formatResult({false, nullptr, "something went wrong"}) == "Error: something went wrong",
           "errors print with an Error: prefix");
+    JSONValue decimal(1.23456789);
+    check(formatResult({true, &decimal, ""}) == "1.23457", "numbers keep six significant digits");
+    JSONValue exponent(1000000.0);
+    check(formatResult({true, &exponent, ""}) == "1e+06", "large numbers use exponent notation");
 }
 
 void testFiles() {
@@ -406,6 +410,8 @@ void testQueries() {
                R"([{"id":3,"city":"Los Angeles","price":9,"active":true,"profile":{"name":"C"}}])");
     checkQuery(records, R"(GROUPBY(GET("city")))",
                R"({"Riverside":[{"id":1,"city":"Riverside","price":4,"active":true,"profile":{"name":"A"}},{"id":2,"city":"Riverside","price":2,"active":false,"profile":{"name":"B"}}],"Los Angeles":[{"id":3,"city":"Los Angeles","price":9,"active":true,"profile":{"name":"C"}}]})");
+    checkQuery(R"([{"value":1.23456789}])", R"(GROUPBY(GET("value")))",
+               R"({"1.23457":[{"value":1.23457}]})");
     checkQuery(records, R"(AVERAGE(GET("price")))", "5");
     checkQuery(records, R"(GROUPBY(GET("city")) | AVERAGE(GET("price")))",
                R"({"Riverside":3,"Los Angeles":9})");
