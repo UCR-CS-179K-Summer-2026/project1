@@ -657,7 +657,7 @@ $ ./build/streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'
           <div class="arrow">&#8594;</div>
           <div class="stage">
             <div class="owner">Javier</div>
-            <h4><code>excecuteQuery()</code></h4>
+            <h4><code>executeQuery()</code></h4>
             <ul>
               <li><code>query-engine.cpp</code></li>
               <li>walks each <code>QueryFunction</code> in order</li>
@@ -667,7 +667,7 @@ $ ./build/streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'
         </div>
         <p class="muted">
           <code>GROUPBY(GET("city")) | AVERAGE(GET("price"))</code> is one query string but
-          two <code>QueryFunction</code>s. <code>excecuteQuery()</code> starts with
+          two <code>QueryFunction</code>s. <code>executeQuery()</code> starts with
           <code>current = session.file</code> and, for each stage, replaces <code>current</code>
           with that stage's result — <code>GROUPBY</code> turns an array into an object keyed
           by group, and the following <code>AVERAGE</code> sees that object and averages
@@ -677,7 +677,7 @@ $ ./build/streamline json/students.json 'FILTER(GET("gpa") &gt; 3.9) | LIMIT(3)'
         </p>
 
         <figure class="diagram">
-          <img src="assets/architecture-diagram.png" alt="Streamline architecture diagram: file loading pipeline (FileScanner → FileParser → Session) and query execution pipeline (QueryScanner/QueryParser → Expression tree → excecuteQuery)">
+          <img src="assets/architecture-diagram.png" alt="Streamline architecture diagram: file loading pipeline (FileScanner → FileParser → Session) and query execution pipeline (QueryScanner/QueryParser → Expression tree → executeQuery)">
           <figcaption>End-to-end architecture — file loading and query execution pipelines.</figcaption>
         </figure>
       </section>
@@ -886,7 +886,7 @@ public:
 };</code></pre>
 
         <h3>Session &amp; execution engine (Ryan &amp; Javier)</h3>
-        <p class="muted"><code>Session</code> holds the uploaded document; <code>excecuteQuery()</code> runs a query string against it and returns the formatted result (or a formatted error) as one <code>string</code> — no exceptions escape past it for a malformed query, they're caught by the caller in <code>main.cpp</code>. <code>Session::initialize()</code> now moves its arguments into place rather than copying them (see <a href="#optimizations">Optimizations</a>). <code>evaluateNode()</code> and <code>compareValues()</code> are the two functions that actually walk a parsed <code>FILTER</code> condition against one record — <code>evaluateNode()</code> recurses over an <code>ExpressionNode</code> by <code>NodeId</code> (short-circuiting <code>AND</code>/<code>OR</code> before recursing into the untaken side), bottoming out at <code>compareValues()</code> for a leaf comparison.</p>
+        <p class="muted"><code>Session</code> holds the uploaded document; <code>executeQuery()</code> runs a query string against it and returns the formatted result (or a formatted error) as one <code>string</code> — no exceptions escape past it for a malformed query, they're caught by the caller in <code>main.cpp</code>. <code>Session::initialize()</code> now moves its arguments into place rather than copying them (see <a href="#optimizations">Optimizations</a>). <code>evaluateNode()</code> and <code>compareValues()</code> are the two functions that actually walk a parsed <code>FILTER</code> condition against one record — <code>evaluateNode()</code> recurses over an <code>ExpressionNode</code> by <code>NodeId</code> (short-circuiting <code>AND</code>/<code>OR</code> before recursing into the untaken side), bottoming out at <code>compareValues()</code> for a leaf comparison.</p>
         <pre><code>struct Session {
     JSONValue file = JSONValue(nullptr);
     bool isInitialized = false;
@@ -896,7 +896,7 @@ public:
 };
 
 void uploadFile(const string&amp; path, Session&amp; session);
-string excecuteQuery(Session&amp; session, const string&amp; query);
+string executeQuery(Session&amp; session, const string&amp; query);
 
 struct LookupResult {
     bool ok;
@@ -1012,10 +1012,10 @@ function parseComparison():
 
         <h3>Query evaluation</h3>
         <p class="muted">
-          <code>excecuteQuery()</code> walks the parsed <code>QueryFunction</code> list in
+          <code>executeQuery()</code> walks the parsed <code>QueryFunction</code> list in
           order, threading one value — <code>current</code> — through every stage.
         </p>
-        <pre><code>function excecuteQuery(session, query):
+        <pre><code>function executeQuery(session, query):
     functions ← QueryParser(query).parse()
     current ← session.file
 
@@ -1275,7 +1275,7 @@ function evaluate(node, record):        # expression-tree evaluation, used by FI
 
         <h3>Eliminating the query-start and per-stage deep copies <span class="status done">done</span> <span class="muted" style="font-size:0.8rem; font-weight:400;">— Jules &amp; Javier</span></h3>
         <p class="muted">
-          <code>excecuteQuery()</code> used to do <code>JSONValue current = session.file;</code>
+          <code>executeQuery()</code> used to do <code>JSONValue current = session.file;</code>
           — a full deep copy of the entire uploaded document before a single field was read, on
           <em>every</em> query. Jules's fix replaced that with a borrowed
           <code>const JSONValue*</code> that only materializes an owned, mutable copy
@@ -1299,7 +1299,7 @@ function evaluate(node, record):        # expression-tree evaluation, used by FI
     return arr[i];                                              // still borrowed: must copy
 };</code></pre>
         <p class="muted">
-          <code>owns</code> is threaded through <code>excecuteQuery()</code> alongside
+          <code>owns</code> is threaded through <code>executeQuery()</code> alongside
           <code>current</code> — true once an earlier stage has already produced a value nobody
           else needs, false while still reading directly from <code>session.file</code> (which
           must survive intact for the <em>next</em> query on the same session). It's this one
@@ -1727,7 +1727,7 @@ cmake --build build
         <h3>Week over week</h3>
         <p class="muted">
           Same machine, same dataset (<code>students.json</code>), same query
-          (<code>AVERAGE(GET("gpa"))</code>) — <code>uploadFile()</code>/<code>excecuteQuery()</code>
+          (<code>AVERAGE(GET("gpa"))</code>) — <code>uploadFile()</code>/<code>executeQuery()</code>
           built and run directly from each week's own snapshot (<code>week2/</code>,
           <code>week3/</code>, and current <code>main</code>), not carried over from old CSVs
           from other machines. How each number got there is already covered stage-by-stage in
@@ -1851,14 +1851,14 @@ cmake --build build       # (re)build — only recompiles what changed
               <li>Designed and built <code>QueryScanner</code>/<code>QueryParser</code> — the tokenizer and recursive-descent grammar for the query language, including <code>AND</code>/<code>OR</code> and <code>AVERAGE</code>-as-operand (<a href="#feat-filter-average">Filter by Average</a>)</li>
               <li>Fixed <code>.jsonl</code> parsing/scanning correctness, and rejected trailing content after a top-level scalar</li>
               <li>Replaced both scanners' per-word/per-keyword character chains with static keyword-lookup tables, and <code>stod</code>/<code>stoi</code> with <code>from_chars</code> in the parsers — see <a href="#optimizations">Optimizations</a></li>
-              <li>Removed an extra full-document copy from <code>Session::initialize()</code> via move semantics, and the query-start whole-document copy from <code>excecuteQuery()</code> (see <a href="#optimizations">Optimizations</a>)</li>
+              <li>Removed an extra full-document copy from <code>Session::initialize()</code> via move semantics, and the query-start whole-document copy from <code>executeQuery()</code> (see <a href="#optimizations">Optimizations</a>)</li>
             </ul>
           </div>
           <div class="card">
             <div class="owner">Javier</div>
             <h4>Query execution engine &amp; performance</h4>
             <ul>
-              <li>Implemented <code>FILTER</code>, <code>SORT</code>, <code>LIMIT</code>, <code>GROUPBY</code>, and <code>AVERAGE</code> against the expression tree in <code>excecuteQuery()</code></li>
+              <li>Implemented <code>FILTER</code>, <code>SORT</code>, <code>LIMIT</code>, <code>GROUPBY</code>, and <code>AVERAGE</code> against the expression tree in <code>executeQuery()</code></li>
               <li>Sort-key precomputation and hash-map grouping (see <a href="#optimizations">Optimizations</a>) instead of the naive O(n log n) / O(n·groups) approach</li>
               <li>Found and fixed several crash bugs (type-mismatch comparisons, non-numeric <code>AVERAGE</code>, invalid <code>GROUPBY</code> keys) so bad input fails cleanly instead of taking the program down</li>
               <li>Fast-path key comparison in <code>get()</code> and a parallel reduction for <code>AVERAGE</code> — 40.7ms &rarr; 28.0ms measured query time on the 85k-record benchmark (see <a href="#optimizations">Optimizations</a>)</li>
@@ -1937,7 +1937,7 @@ cmake --build build       # (re)build — only recompiles what changed
           <div class="entry">
             <div class="date">Aug 8&ndash;9</div>
             <h4>Session refactor &amp; CLI integration</h4>
-            <p>Moved from a list-of-records model to <code>Session</code> holding one document; wired the CLI's menu through <code>excecuteQuery()</code>; added <code>--version</code> and the regression/benchmark harnesses.</p>
+            <p>Moved from a list-of-records model to <code>Session</code> holding one document; wired the CLI's menu through <code>executeQuery()</code>; added <code>--version</code> and the regression/benchmark harnesses.</p>
           </div>
           <div class="entry">
             <div class="date">Aug 9</div>
