@@ -886,7 +886,7 @@ public:
 };</code></pre>
 
         <h3>Session &amp; execution engine (Ryan &amp; Javier)</h3>
-        <p class="muted"><code>Session</code> holds the uploaded document; <code>excecuteQuery()</code> runs a query string against it and returns the formatted result (or a formatted error) as one <code>string</code> — no exceptions escape past it for a malformed query, they're caught by the caller in <code>main.cpp</code>. <code>Session::initialize()</code> now moves its arguments into place rather than copying them (see <a href="#optimizations">Optimizations</a>).</p>
+        <p class="muted"><code>Session</code> holds the uploaded document; <code>excecuteQuery()</code> runs a query string against it and returns the formatted result (or a formatted error) as one <code>string</code> — no exceptions escape past it for a malformed query, they're caught by the caller in <code>main.cpp</code>. <code>Session::initialize()</code> now moves its arguments into place rather than copying them (see <a href="#optimizations">Optimizations</a>). <code>evaluateNode()</code> and <code>compareValues()</code> are the two functions that actually walk a parsed <code>FILTER</code> condition against one record — <code>evaluateNode()</code> recurses over an <code>ExpressionNode</code> by <code>NodeId</code> (short-circuiting <code>AND</code>/<code>OR</code> before recursing into the untaken side), bottoming out at <code>compareValues()</code> for a leaf comparison.</p>
         <pre><code>struct Session {
     JSONValue file = JSONValue(nullptr);
     bool isInitialized = false;
@@ -905,7 +905,11 @@ struct LookupResult {
 };
 
 LookupResult get(const JSONValue&amp; value, const vector&lt;string_view&gt;&amp; path);
-string formatResult(const LookupResult&amp; result);</code></pre>
+string formatResult(const LookupResult&amp; result);
+
+// used by FILTER's condition and SORT's comparator
+JSONValue evaluateNode(NodeId id, const vector&lt;ExpressionNode&gt;&amp; nodes, const JSONValue&amp; record);
+bool compareValues(const JSONValue&amp; lhs, QueryTokenType op, const JSONValue&amp; rhs);</code></pre>
 
         <h3>CLI (Ryan)</h3>
         <p class="muted"><code>main.cpp</code> is menu-driven: <code>doUpload()</code> then <code>doSearch()</code> loop over <code>promptLine()</code>, so a file is read once and queried as many times as you want. <code>promptLine()</code> uses GNU Readline for arrow-key history and in-line editing when it's available (<code>STREAMLINE_READLINE</code>, detected by <code>CMakeLists.txt</code>) and falls back to plain <code>getline</code> otherwise. The direct <code>argv</code> form (<code>streamline file.json "query"</code>) still works too, for scripting. See <a href="#tutorial">Tutorial</a> for a full transcript.</p>
@@ -1290,6 +1294,19 @@ function evaluate(node, record):        # expression-tree evaluation, used by FI
           <em>already decided to keep</em>. A record that fails the predicate, or that
           <code>LIMIT</code> never reaches, is never touched at all.
         </p>
+        <pre><code>auto take = [](const ArrayValue&amp; arr, size_t i, bool owns) -&gt; JSONValue {
+    if (owns) return move(const_cast&lt;JSONValue&amp;&gt;(arr[i]));  // owned: safe to move out
+    return arr[i];                                              // still borrowed: must copy
+};</code></pre>
+        <p class="muted">
+          <code>owns</code> is threaded through <code>excecuteQuery()</code> alongside
+          <code>current</code> — true once an earlier stage has already produced a value nobody
+          else needs, false while still reading directly from <code>session.file</code> (which
+          must survive intact for the <em>next</em> query on the same session). It's this one
+          function, reused as-is, that <code>FILTER</code>, <code>LIMIT</code>, and
+          <code>GROUPBY</code> all call per surviving record — see below for how each one
+          decides what survives.
+        </p>
         <p class="muted">
           <code>SORT</code> is a deliberate exception: it keeps every record, so per-record
           laziness buys it nothing and only adds a function-call per element. It instead takes
@@ -1330,6 +1347,47 @@ function evaluate(node, record):        # expression-tree evaluation, used by FI
           <code>hasTypeError</code> cross-thread workaround — a record whose condition/key can't
           be evaluated was already caught and skipped <em>inside</em> the per-record loop, so
           nothing ever needs to escape a worker thread.
+        </p>
+        <pre><code>auto filterRange = [&amp;](size_t begin, size_t end) -&gt; ArrayValue {
+    ArrayValue localMatches;
+    for (size_t i = begin; i &lt; end; i++) {
+        bool keep;
+        try { keep = requireBoolean(evaluateNode(filterFunc.condition, nodes, arr[i])); }
+        catch (const exception&amp;) { continue; }
+        if (keep) localMatches.push_back(take(arr, i, owns));
+    }
+    return localMatches;
+};
+
+struct LocalGroups {
+    unordered_map&lt;string, size_t&gt; index;       // key -&gt; position in groups
+    vector&lt;pair&lt;string, ArrayValue&gt;&gt; groups;    // insertion-ordered buckets
+};
+
+auto groupRange = [&amp;](size_t begin, size_t end) -&gt; LocalGroups {
+    LocalGroups local;
+    for (size_t i = begin; i &lt; end; i++) {
+        LookupResult found = get(arr[i], target.path);
+        if (!found.ok) continue;
+        string key = groupKeyText(*found.value);
+        auto it = local.index.find(key);          // O(1) average: hash key -&gt; bucket
+        size_t bucketIndex = (it != local.index.end())
+            ? it-&gt;second
+            : local.groups.size();                 // new key: bucket goes at the end
+        if (it == local.index.end()) {
+            local.index.emplace(key, bucketIndex);
+            local.groups.emplace_back(key, ArrayValue{});
+        }
+        local.groups[bucketIndex].second.push_back(take(arr, i, owns));
+    }
+    return local;
+};</code></pre>
+        <p class="muted">
+          Both run below <code>PARALLEL_THRESHOLD</code> as a single direct call
+          (<code>filterRange(0, n)</code> / <code>groupRange(0, n)</code>) and above it split
+          across <code>hardware_concurrency()</code> threads, each given its own
+          <code>[begin, end)</code> slice — same dispatch shape either way, just one function
+          body reused.
         </p>
         <p class="muted">
           <code>FILTER</code>'s merge is a plain ordered concatenation: partitions cover
