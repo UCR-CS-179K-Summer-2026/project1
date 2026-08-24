@@ -29,7 +29,7 @@ struct LookupResult {
 void uploadFile(const string& path, Session& session);
 void uploadQuery(const string& query, Session& session);
 
-string excecuteQuery(Session& session, const string& query);
+string executeQuery(Session& session, const string& query);
 
 // Looks up a property (or nested path of properties/indices) inside a
 // JSONValue tree, per the arguments to a GET(...) call, e.g.:

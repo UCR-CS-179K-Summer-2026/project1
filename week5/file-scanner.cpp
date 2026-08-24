@@ -1,4 +1,4 @@
-// This file is meant to implement the Scanner class, which is responsible for scanning a JSON or JSONL string and producing a sequence of tokens.
+// This file is meant to implement the FileScanner class, which is responsible for scanning a JSON or JSONL string and producing a sequence of tokens.
 // It also implements the scan() method, which returns the next token in the input string.
 #include "file-scanner.h"
 
@@ -101,8 +101,15 @@ Token FileScanner::scan() {
             string_view num(curr, match.length());
             curr += match.length();
             return Token(JSONTokenType::Number, num);
-        } 
+        }
 
+        // Left here intentionally, not dead code to delete: this hand-rolled
+        // validator replaced the regex above for one sprint, then was rolled
+        // back to the better-tested regex under time pressure. Kept
+        // commented out (rather than removed) so the ~64% load-time cost of
+        // that choice can be reproduced by uncommenting this block and
+        // deleting the regex_search call above -- see the Limitations
+        // section of the design page for the measured before/after.
         /*const char* numberBegin = curr;
 
         while(curr < end && *curr != ',' && *curr != ']' && *curr != '}' && *curr != ':'

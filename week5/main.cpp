@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
     
     try {
         uploadFile(args[0], session);
-        cout << excecuteQuery(session, args[1]) << "\n";
+        cout << executeQuery(session, args[1]) << "\n";
     } catch (const exception& e) {
         cout << "streamline: " << e.what() << "\n";
         return 1;
@@ -131,7 +131,7 @@ bool doSearch(Session& session) {
         }
 
         try {
-            cout << excecuteQuery(session, query) << "\n";
+            cout << executeQuery(session, query) << "\n";
         } catch (const exception& e) {
             cout << "streamline: " << e.what() << "\n";
         }

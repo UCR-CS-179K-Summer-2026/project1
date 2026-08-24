@@ -1,5 +1,5 @@
-// Jules contributed to this file. This file is meant to implement the Parser class, which is responsible for parsing a JSON or JSONL string and producing a JSONValue.
-// It uses the Scanner class to tokenize the input string, and implements a recursive descent parser to build the JSONValue.
+// Jules contributed to this file. This file is meant to implement the FileParser class, which is responsible for parsing a JSON or JSONL string and producing a JSONValue.
+// It uses the FileScanner class to tokenize the input string, and implements a recursive descent parser to build the JSONValue.
 #include "file-parser.h"
 
 JSONValue FileParser::parse() {
@@ -36,21 +36,13 @@ JSONValue FileParser::parseObject() {
 
             while(currToken.type != JSONTokenType::RBrace) {
                 if(currToken.type != JSONTokenType::String) {
-                    if(fileType == ParserType::JSON) {
-                        throw runtime_error("Warning: line " + to_string(scanner.getLineNumber()) + " failed to parse");
-                    } else {
-                        throw runtime_error("Expected string key in object");
-                    }
+                    throw runtime_error("Expected string key in object at line " + to_string(scanner.getLineNumber()));
                 }
                 string key(currToken.value);
                 currToken = scanner.scan();
 
                 if(currToken.type != JSONTokenType::Colon) {
-                    if(fileType == ParserType::JSON) {
-                        throw runtime_error("Warning: line " + to_string(scanner.getLineNumber()) + " failed to parse");
-                    } else {
-                        throw runtime_error("Expected colon after key in object");
-                    }
+                    throw runtime_error("Expected colon after key in object at line " + to_string(scanner.getLineNumber()));
                 }
                 currToken = scanner.scan();
 
@@ -60,11 +52,7 @@ JSONValue FileParser::parseObject() {
                 if(currToken.type == JSONTokenType::Comma) {
                     currToken = scanner.scan();
                 } else if(currToken.type != JSONTokenType::RBrace) {
-                    if(fileType == ParserType::JSON) {
-                        throw runtime_error("Warning: line " + to_string(scanner.getLineNumber()) + " failed to parse");
-                    } else {
-                        throw runtime_error("Expected comma or closing brace in object");
-                    }
+                    throw runtime_error("Expected comma or closing brace in object at line " + to_string(scanner.getLineNumber()));
                 }
             }
             currToken = scanner.scan();
@@ -81,11 +69,7 @@ JSONValue FileParser::parseObject() {
                 if(currToken.type == JSONTokenType::Comma) {
                     currToken = scanner.scan();
                 } else if(currToken.type != JSONTokenType::RBracket) {
-                    if(fileType == ParserType::JSON) {
-                        throw runtime_error("Warning: line " + to_string(scanner.getLineNumber()) + " failed to parse");
-                    } else {
-                        throw runtime_error("Expected comma or closing bracket in array");
-                    }
+                    throw runtime_error("Expected comma or closing bracket in array at line " + to_string(scanner.getLineNumber()));
                 }
             }
             currToken = scanner.scan();

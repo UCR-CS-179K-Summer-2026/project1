@@ -102,7 +102,6 @@ NodeId QueryParser::parseGet() {
     advance();  // consume ')'
 
     NodeId node = allocateGet(move(props));
-    //functions.push_back(Get{node});
     return node;
 }
 
@@ -115,7 +114,6 @@ void QueryParser::parseLimit() {
         throw runtime_error("Expected number in LIMIT");
     }
 
-    //int size = stoi(string(currToken.value));
     int size;
     auto [ptr, ec] = from_chars(currToken.value.data(), currToken.value.data() + currToken.value.size(), size);
     if (ec != errc() || ptr != currToken.value.data() + currToken.value.size()) {

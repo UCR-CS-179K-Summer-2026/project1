@@ -276,7 +276,7 @@ BenchmarkResult runBenchmark(const BenchmarkDataset& dataset, const BenchmarkCas
     string result;
     auto queryStarted = chrono::steady_clock::now();
     try {
-        result = excecuteQuery(session, benchmark.query);
+        result = executeQuery(session, benchmark.query);
     } catch (...) {
         cout.rdbuf(normalOutput);
         throw;

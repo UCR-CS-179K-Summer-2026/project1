@@ -112,7 +112,10 @@ QueryToken QueryScanner::scan() {
             string_view num(curr, match.length());
             curr += match.length();
             return QueryToken(QueryTokenType::Number, num);
-        } 
+        }
+
+        // Same intentional revert as FileScanner::scan() -- see the comment
+        // there and the Limitations section of the design page.
         /*const char* numberBegin = curr;
 
         while(curr < end && *curr != ',' && *curr != ')' && *curr != '\"' && *curr != '(' && *curr != '|' && *curr != '=' && *curr != '!' && *curr != '<' && *curr != '>'

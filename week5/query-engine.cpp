@@ -1,6 +1,7 @@
-// Person 2's contribution: reads a .json or .jsonl file into JSONValue
-// records via Person 1's Parser, and implements path lookup/formatting
-// against the resulting tree.
+// Session & execution engine (Ryan & Javier): reads a .json or .jsonl file
+// into a JSONValue via FileParser, then implements path lookup/formatting
+// and the FILTER/SORT/LIMIT/GROUPBY/AVERAGE pipeline against the resulting
+// tree in executeQuery().
 #include "query-engine.h"
 
 #include <algorithm>
@@ -322,7 +323,7 @@ void uploadFile(const string& path, Session& session) {
     session.initialize(move(temp), name);
 }
 
-string excecuteQuery(Session& session, const string& query) {
+string executeQuery(Session& session, const string& query) {
     QueryParser q(query);
     q.parse();
 
@@ -699,10 +700,6 @@ string excecuteQuery(Session& session, const string& query) {
 
 namespace {
 
-LookupResult error(const string& message) {
-    return {false, nullptr, message};
-}
-
 string formatValue(const JSONValue& value, int depth = 0) {
     string indent(depth + 1, ' ');
     string closeIndent(depth, ' ');
@@ -755,7 +752,6 @@ string formatValue(const vector<JSONValue>& values) {
 
 }  // namespace
 
-//Roughly rewritten to support GET("propName") syntax.
 LookupResult get(const JSONValue& value, const vector<string_view>& path) {
     const JSONValue* current = &value;
 
@@ -771,7 +767,7 @@ LookupResult get(const JSONValue& value, const vector<string_view>& path) {
                 }
             }
             if (!found) {
-                return error("field '" + string(prop) + "' not found");
+                return queryError("field '" + string(prop) + "' not found");
             }
             current = found;
 
@@ -782,20 +778,20 @@ LookupResult get(const JSONValue& value, const vector<string_view>& path) {
             try {
                 index = stoi(indexStr, &parsedLen);
             } catch (const exception&) {
-                return error("expected a numeric index to access an array, got '" + indexStr + "'");
+                return queryError("expected a numeric index to access an array, got '" + indexStr + "'");
             }
             if (parsedLen != indexStr.size()) {
-                return error("expected a numeric index to access an array, got '" + indexStr + "'");
+                return queryError("expected a numeric index to access an array, got '" + indexStr + "'");
             }
 
             const auto& arr = get<ArrayValue>(current->getValue());
             if (index < 0 || static_cast<size_t>(index) >= arr.size()) {
-                return error("index " + indexStr + " out of range");
+                return queryError("index " + indexStr + " out of range");
             }
             current = &arr[static_cast<size_t>(index)];
 
         } else {
-            return error("cannot look up '" + string(prop) + "' on a non-object, non-array value");
+            return queryError("cannot look up '" + string(prop) + "' on a non-object, non-array value");
         }
     }
 
