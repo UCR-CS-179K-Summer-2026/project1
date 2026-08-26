@@ -1,13 +1,3 @@
-{
-    "name": "Alice",
-    ".": "Bob",
-    "\"": "Charlie",
-    "\u0061": "David",
-    "🐘": "Emma",
-    "arr": [
-        {"a": "\uD83C\uDF39"},
-        {"a": "x"},
-        {"a": "x"},
-        {"a": "hello\u0000world"}
-    ] 
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:01bfbcc51d6a1b7dea88eae0539196ee7fa874282b6a48198865310b2ccf27ce
+size 241

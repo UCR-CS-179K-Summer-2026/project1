@@ -1,18 +1,3 @@
-{
-    "name": "Alice",
-    ".": "Bob",
-    "\"": "Charlie",
-    "\u0061": "David",
-    "🐘": "Emma",
-    "arr": [
-        {"a": "\uD83C\uDF39"},
-        {"a": "x"},
-        {"a": "x"},
-        {"a": "hello\u0000world"}
-    ],
-    "better_arr": [
-        [1, 3, 5],
-        [2, 4, 6],
-        [3, 6, 12, 18]
-    ]
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:f8223745aaf731920b065ccd72d13a33cab411fc94d9c871f6709028de51d12c
+size 333

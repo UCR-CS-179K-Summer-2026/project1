@@ -1,12 +1,3 @@
-{
-    "name": "Alice",
-    ".": "Bob",
-    "\"": "Charlie",
-    "\u0061": "David",
-}
-
-
-// unicode after string should display actual character. -  bob\uA7A*  =bobe 65A has to convert to hex
-
-//null byte /0 often treated as stop 
-
+version https://git-lfs.github.com/spec/v1
+oid sha256:69071fd19c6e2e44ebcd834e8d8f8f647dc174046bc2a66829b113ecc344a353
+size 242

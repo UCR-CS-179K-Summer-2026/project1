@@ -1,1 +1,3 @@
-{"number":42,"float":3.14,"negative":-5,"string":"hi","yes":true,"no":false,"nothing":null}
+version https://git-lfs.github.com/spec/v1
+oid sha256:ac391f477087046851785a54f2302f56c271b54b1b5e7331fc0b7b673696e15d
+size 91
