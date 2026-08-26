@@ -138,6 +138,8 @@ const vector<BenchmarkDataset> BENCHMARK_DATASETS = {
     }
 };
 
+const BenchmarkCase LOAD_BENCHMARK = {"load", "", ""};
+
 struct BenchmarkResult {
     size_t records;
     bool valid;
@@ -157,7 +159,9 @@ struct BenchmarkRun {
 struct BenchmarkOptions {
     string machine;
     filesystem::path output;
+    string dataset;
     bool outputWasSet = false;
+    bool datasetWasSet = false;
     bool showHelp = false;
 };
 
@@ -218,6 +222,12 @@ BenchmarkOptions parseOptions(int argc, char** argv) {
             }
             options.output = argv[++i];
             options.outputWasSet = true;
+        } else if (argument == "--dataset") {
+            if (i + 1 >= argc) {
+                throw invalid_argument("--dataset requires a name");
+            }
+            options.dataset = argv[++i];
+            options.datasetWasSet = true;
         } else if (argument == "--help" || argument == "-h") {
             options.showHelp = true;
         } else {
@@ -264,13 +274,21 @@ string csvField(const string& value) {
     return escaped;
 }
 
-BenchmarkResult runBenchmark(const BenchmarkDataset& dataset, const BenchmarkCase& benchmark) {
+BenchmarkResult runLoadBenchmark(const BenchmarkDataset& dataset) {
     Session session;
 
     auto start = chrono::steady_clock::now();
     uploadFile(dataset.path.string(), session);
-    auto loaded = chrono::steady_clock::now();
+    auto finished = chrono::steady_clock::now();
 
+    double loadMs = chrono::duration<double, milli>(finished - start).count();
+    bool valid = static_cast<size_t>(session.records) == dataset.expectedRecords;
+
+    return {static_cast<size_t>(session.records), valid, loadMs, 0, loadMs};
+}
+
+BenchmarkResult runQueryBenchmark(Session& session, const BenchmarkDataset& dataset,
+                                  const BenchmarkCase& benchmark) {
     ostringstream ignored;
     streambuf* normalOutput = cout.rdbuf(ignored.rdbuf());
     string result;
@@ -284,14 +302,12 @@ BenchmarkResult runBenchmark(const BenchmarkDataset& dataset, const BenchmarkCas
     auto finished = chrono::steady_clock::now();
     cout.rdbuf(normalOutput);
 
-    double loadMs = chrono::duration<double, milli>(loaded - start).count();
     double queryMs = chrono::duration<double, milli>(finished - queryStarted).count();
-    double totalMs = loadMs + queryMs;
     bool valid = static_cast<size_t>(session.records) == dataset.expectedRecords
                  && result.rfind("Error:", 0) != 0
                  && (benchmark.expectedResult.empty() || result == benchmark.expectedResult);
 
-    return {static_cast<size_t>(session.records), valid, loadMs, queryMs, totalMs};
+    return {static_cast<size_t>(session.records), valid, 0, queryMs, queryMs};
 }
 
 void printResult(const string& run, const BenchmarkResult& result) {
@@ -357,7 +373,7 @@ void appendCsv(const BenchmarkOptions& options, const vector<BenchmarkRun>& benc
 }
 
 void printUsage() {
-    cout << "usage: benchmark [--machine <label>] [--output <csv-path>]\n";
+    cout << "usage: benchmark [--machine <label>] [--output <csv-path>] [--dataset <name>]\n";
 }
 
 int main(int argc, char** argv) {
@@ -374,12 +390,64 @@ int main(int argc, char** argv) {
              << "Version: " << getVersionId() << "\n"
              << "Machine: " << options.machine << "\n";
 
+        bool datasetFound = false;
         for (const BenchmarkDataset& dataset : BENCHMARK_DATASETS) {
+            if (options.datasetWasSet && dataset.name != options.dataset
+                && dataset.path.filename().string() != options.dataset) {
+                continue;
+            }
+            datasetFound = true;
+
             cout << "\nDataset: " << dataset.name << "\n";
             size_t datasetBytes = filesystem::file_size(dataset.path);
 
+            BenchmarkResult loadWarmup = runLoadBenchmark(dataset);
+            if (!loadWarmup.valid) {
+                cerr << "benchmark: unexpected record count for " << dataset.name << "\n";
+                return 1;
+            }
+
+            vector<BenchmarkResult> loadResults;
+            loadResults.reserve(RUNS);
+            for (int i = 0; i < RUNS; i++) {
+                BenchmarkResult result = runLoadBenchmark(dataset);
+                if (!result.valid) {
+                    cerr << "benchmark: unexpected record count for " << dataset.name << "\n";
+                    return 1;
+                }
+                loadResults.push_back(move(result));
+            }
+
+            cout << "\nBenchmark: load\n"
+                 << "Records: " << loadResults[0].records << "\n\n"
+                 << left << setw(8) << "Run"
+                 << right << setw(12) << "Load (ms)"
+                 << setw(13) << "Query (ms)"
+                 << setw(13) << "Total (ms)" << "\n";
+            for (size_t i = 0; i < loadResults.size(); i++) {
+                printResult(to_string(i + 1), loadResults[i]);
+            }
+
+            vector<BenchmarkResult> sortedLoadResults = loadResults;
+            sort(sortedLoadResults.begin(), sortedLoadResults.end(), [](const BenchmarkResult& a,
+                                                                       const BenchmarkResult& b) {
+                return a.totalMs < b.totalMs;
+            });
+            BenchmarkResult loadMedian = sortedLoadResults[sortedLoadResults.size() / 2];
+            cout << string(46, '-') << "\n";
+            printResult("Median", loadMedian);
+            benchmarkRuns.push_back({dataset.name, datasetBytes, LOAD_BENCHMARK,
+                                     move(loadResults), loadMedian});
+
+            Session session;
+            uploadFile(dataset.path.string(), session);
+            if (static_cast<size_t>(session.records) != dataset.expectedRecords) {
+                cerr << "benchmark: unexpected record count for " << dataset.name << "\n";
+                return 1;
+            }
+
             for (const BenchmarkCase& benchmark : dataset.cases) {
-                BenchmarkResult warmup = runBenchmark(dataset, benchmark);
+                BenchmarkResult warmup = runQueryBenchmark(session, dataset, benchmark);
                 if (!warmup.valid) {
                     cerr << "benchmark: unexpected result for " << dataset.name
                          << " " << benchmark.name << "\n";
@@ -389,7 +457,7 @@ int main(int argc, char** argv) {
                 vector<BenchmarkResult> results;
                 results.reserve(RUNS);
                 for (int i = 0; i < RUNS; i++) {
-                    BenchmarkResult result = runBenchmark(dataset, benchmark);
+                    BenchmarkResult result = runQueryBenchmark(session, dataset, benchmark);
                     if (!result.valid) {
                         cerr << "benchmark: unexpected result for " << dataset.name
                              << " " << benchmark.name << "\n";
@@ -420,6 +488,10 @@ int main(int argc, char** argv) {
                 benchmarkRuns.push_back({dataset.name, datasetBytes, benchmark,
                                          move(results), median});
             }
+        }
+
+        if (options.datasetWasSet && !datasetFound) {
+            throw invalid_argument("unknown dataset '" + options.dataset + "'");
         }
 
         appendCsv(options, benchmarkRuns);
