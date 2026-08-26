@@ -26,7 +26,49 @@ C++
 
 ## Build & Run
 
-Requires CMake 3.16+ and a C++17 compiler.
+Requires CMake 3.16+, a C++17 compiler, and **Git LFS** (to fetch the large JSON/JSONL datasets).
+
+### 1. Prerequisites (Git & Git LFS)
+
+Ensure **Git** and **Git LFS** are installed on your system:
+
+- **macOS:**
+  ```sh
+  # Install Git (if not already installed) & Git LFS via Homebrew
+  brew install git git-lfs
+  git lfs install
+  ```
+
+- **Windows:**
+  - Download and run the installer from [git-scm.com](https://git-scm.com/) (Git LFS is bundled automatically), or install via **winget**:
+    ```sh
+    winget install Git.Git
+    winget install GitHub.GitLFS
+    git lfs install
+    ```
+
+- **Linux (Debian/Ubuntu):**
+  ```sh
+  sudo apt-get update && sudo apt-get install git git-lfs
+  git lfs install
+  ```
+
+### 2. Clone the Repository
+
+```sh
+git clone https://github.com/UCR-CS-179K-Summer-2026/project1.git
+cd project1
+```
+
+### 3. Download Data Files
+
+After cloning, pull the actual dataset files tracked by Git LFS:
+
+```sh
+git lfs pull
+```
+
+### 4. Optional Readline Support (macOS)
 
 On macOS, install Readline if you want to use the arrow keys to go through
 past commands when using the streamline build:
@@ -38,14 +80,16 @@ brew install readline
 The program still builds without Readline, but the input will be more basic.
 Use `Command+V` to paste into the terminal.
 
+### 5. Configure & Build
+
 ```sh
 cmake -B build
-cmake --build build
+cmake --build build --parallel
 ```
 
 The build creates three programs: `streamline` for the CLI, `tests` for the
-correctness tests, and `benchmark` for the performance test. Run them from
-the main project folder.
+correctness tests, and `benchmark` for performance testing. Run them from
+the main project folder:
 
 ```sh
 ./build/streamline
@@ -219,11 +263,15 @@ Result: [{"a": 2, "b": 5}]
 
 ## Performance Benchmarks
 
-The benchmark runs against `students.json`, `cars.json`, `housing.json`, and
-`movies.json`. Each file is 50 MB. Every load and query gets one warmup run and
-five recorded runs. Loads are measured separately, and every query runs on a
-dataset that was loaded before its timer starts. The program prints each run
-and its median, then appends the results to a CSV file in `benchmarks/results`.
+The benchmark suite tests performance across a diverse range of dataset sizes and formats:
+
+- **20 MB:** `json/ram.jsonl` (141K records)
+- **~50 MB:** `json/students.json` (85K records), `json/cars.json` (71K records), `json/housing.json` (48K records), `json/movies.json` (43K records)
+- **100 MB:** `json/food.jsonl` (737K records)
+- **809 MB:** `json/kaggle_datasets/matchups.json` (2.4M records)
+- **1.3 GB:** `json/kaggle_datasets/spotify.jsonl` (498K records)
+
+Every load and query gets one warmup run and five recorded runs. Loads are measured separately, and every query runs on a dataset that was loaded before its timer starts. The program prints each run and its median, then appends the results to a CSV file in `benchmarks/results/`.
 
 - `nested_get` reads a nested value from the middle of the file.
 - `average` averages a numeric field.
@@ -235,16 +283,44 @@ and its median, then appends the results to a CSV file in `benchmarks/results`.
 - `sort_pipeline` sorts the records and finishes with a GET.
 - `groupby_pipeline` groups the records and finishes with a GET.
 
+### Running Benchmarks
+
 ```sh
+# 1. Run all benchmarks across all available datasets (default)
 ./build/benchmark
-./build/benchmark --machine lab-mac
-./build/benchmark --output benchmarks/results/test-run.csv
+
+# 2. Benchmark a specific dataset only (e.g. 20MB, 50MB, 100MB, or Kaggle files)
+./build/benchmark --dataset ram.jsonl
 ./build/benchmark --dataset students.json
+./build/benchmark --dataset food.jsonl
+./build/benchmark --dataset matchups.json
+./build/benchmark --dataset spotify.jsonl
+
+# 3. Label your hardware environment for comparative analysis
+./build/benchmark --machine "macbook-pro-m2"
+
+# 4. Save results to a custom CSV location
+./build/benchmark --output benchmarks/results/my-run.csv
+
+# 5. Combine flags for full control
+./build/benchmark --dataset ram.jsonl --machine "lab-mac" --output benchmarks/results/ram-test.csv
 ```
 
-Use the same machine name when collecting results on the same computer. The
-CSV records the version, machine, build information, query name, record count,
+### Benchmark Command Options
+
+| Option | Required? | Description |
+|---|---|---|
+| *(no flags)* | No | Runs every dataset in the benchmark suite sequentially. |
+| `--dataset <name>` | Optional | Limits the benchmark run to a single configured dataset (e.g., `ram.jsonl`, `students.json`, `food.jsonl`, `matchups.json`, `spotify.jsonl`). |
+| `--machine <label>` | Optional | Labels the machine name recorded in the CSV (e.g., `macbook-pro-m2`, `lab-linux`). Auto-detects hostname if omitted. |
+| `--output <path>` | Optional | Custom CSV filepath. Defaults to `benchmarks/results/<machine-name>.csv`. |
+| `--help` / `-h` | Optional | Displays the usage synopsis. |
+
+> **Note on Custom Datasets:** The `--dataset` option selects from the datasets configured in the benchmark suite (since automated benchmarking requires predefined queries, expected field schemas, and verification assertions). To load and query any arbitrary `.json` or `.jsonl` file interactively, use the CLI tool (`./build/streamline`). To add a new custom file permanently to the benchmark suite, add an entry to the `BENCHMARK_DATASETS` array in `tests/performance/benchmark.cpp`.
+
+The CSV records the version, machine, build information, query name, record count,
 and load, query, and total times. Use `load_ms` to compare load cases and
 `query_ms` to compare query cases. Query times do not include loading the file.
 Standalone SORT, LIMIT, and GROUPBY include the time needed to format their
 full results.
+
