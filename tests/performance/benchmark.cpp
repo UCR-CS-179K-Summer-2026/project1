@@ -61,6 +61,25 @@ struct BenchmarkDataset {
 
 const vector<BenchmarkDataset> BENCHMARK_DATASETS = {
     {
+        "json/ram.jsonl",
+        PROJECT_ROOT / "json/ram.jsonl",
+        140552,
+        {
+            {"nested_get", R"(GET(70276, "device_type"))", "\"Server\""},
+            {"average", R"(AVERAGE(GET("price")))", "162.943"},
+            {"filter_none", R"(FILTER(GET("price") > 10000))", "[]"},
+            {"sort", R"(SORT(GET("price"), DESC))", ""},
+            {"limit", "LIMIT(100)", ""},
+            {"groupby", R"(GROUPBY(GET("device_type")))", ""},
+            {"filter_all",
+             R"(FILTER(GET("price") >= 0) | GET(140551, "id"))", "\"132da0ec-b053-4c7a-ad05-6e8fdff45784\""},
+            {"sort_pipeline",
+             R"(SORT(GET("price"), DESC) | GET(0, "id"))", "\"b365891a-74b3-49bc-b6f5-89e28a6e4d68\""},
+            {"groupby_pipeline",
+             R"(GROUPBY(GET("device_type")) | GET("Server", 0, "id"))", "\"795fcbab-3ff1-4c6a-b5ae-c34a2a132d7b\""}
+        }
+    },
+    {
         "json/students.json",
         PROJECT_ROOT / "json/students.json",
         85032,
@@ -134,6 +153,63 @@ const vector<BenchmarkDataset> BENCHMARK_DATASETS = {
              R"(SORT(GET("runtime_minutes"), DESC) | GET(0, "movie_id"))", "28"},
             {"groupby_pipeline",
              R"(GROUPBY(GET("country")) | GET("Mexico", 0, "movie_id"))", "1"}
+        }
+    },
+    {
+        "json/food.jsonl",
+        PROJECT_ROOT / "json/food.jsonl",
+        736928,
+        {
+            {"nested_get", R"(GET(368464, "restaurant"))", "\"Dominos\""},
+            {"average", R"(AVERAGE(GET("price")))", "8.74631"},
+            {"filter_none", R"(FILTER(GET("price") > 100))", "[]"},
+            {"sort", R"(SORT(GET("price"), DESC))", ""},
+            {"limit", "LIMIT(100)", ""},
+            {"groupby", R"(GROUPBY(GET("restaurant")))", ""},
+            {"filter_all",
+             R"(FILTER(GET("price") >= 0) | GET(736927, "id"))", "\"9fa4e63a-e3d2-4691-a0b6-69e95a8b4dda\""},
+            {"sort_pipeline",
+             R"(SORT(GET("price"), DESC) | GET(0, "id"))", "\"b226f3d9-de76-45ad-80e7-2f5757a82a34\""},
+            {"groupby_pipeline",
+             R"(GROUPBY(GET("restaurant")) | GET("Burger King", 0, "id"))", "\"e238c2cd-709e-486a-be66-b7ccc803cc36\""}
+        }
+    },
+    {
+        "json/kaggle_datasets/matchups.json",
+        PROJECT_ROOT / "json/kaggle_datasets/matchups.json",
+        2419192,
+        {
+            {"nested_get", R"(GET(1209596, "champion"))", "\"Diana\""},
+            {"average", R"(AVERAGE(GET("goldearned")))", "10268.1"},
+            {"filter_none", R"(FILTER(GET("goldearned") > 100000))", "[]"},
+            {"sort", R"(SORT(GET("goldearned"), DESC))", ""},
+            {"limit", "LIMIT(100)", ""},
+            {"groupby", R"(GROUPBY(GET("champion")))", ""},
+            {"filter_all",
+             R"(FILTER(GET("goldearned") >= 0) | GET(2419191, "p_match_id"))", "\"EUN1_2770429988_middle\""},
+            {"sort_pipeline",
+             R"(SORT(GET("goldearned"), DESC) | GET(0, "p_match_id"))", "\"BR1_2330032478_middle\""},
+            {"groupby_pipeline",
+             R"(GROUPBY(GET("champion")) | GET("Renekton", 0, "p_match_id"))", "\"EUN1_2889830073_middle\""}
+        }
+    },
+    {
+        "json/kaggle_datasets/spotify.jsonl",
+        PROJECT_ROOT / "json/kaggle_datasets/spotify.jsonl",
+        498052,
+        {
+            {"nested_get", R"(GET(249026, "song"))", "\"And Many More\""},
+            {"average", R"(AVERAGE(GET("Tempo")))", "0.531244"},
+            {"filter_none", R"(FILTER(GET("Tempo") > 5))", "[]"},
+            {"sort", R"(SORT(GET("Tempo"), DESC))", ""},
+            {"limit", "LIMIT(100)", ""},
+            {"groupby", R"(GROUPBY(GET("Genre")))", ""},
+            {"filter_all",
+             R"(FILTER(GET("Tempo") >= 0) | GET(498051, "song"))", "\"I Wanna Be With You\""},
+            {"sort_pipeline",
+             R"(SORT(GET("Tempo"), DESC) | GET(0, "song"))", "\"Traffic Jam\""},
+            {"groupby_pipeline",
+             R"(GROUPBY(GET("Genre")) | GET("hip hop", 0, "song"))", "\"Even When the Waters Cold\""}
         }
     }
 };
@@ -394,6 +470,14 @@ int main(int argc, char** argv) {
         for (const BenchmarkDataset& dataset : BENCHMARK_DATASETS) {
             if (options.datasetWasSet && dataset.name != options.dataset
                 && dataset.path.filename().string() != options.dataset) {
+                continue;
+            }
+            if (!filesystem::exists(dataset.path)) {
+                if (options.datasetWasSet) {
+                    cerr << "benchmark: dataset file not found: " << dataset.path << "\n";
+                    return 1;
+                }
+                cerr << "benchmark: skipping missing dataset " << dataset.name << "\n";
                 continue;
             }
             datasetFound = true;
