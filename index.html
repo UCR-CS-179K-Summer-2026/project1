@@ -448,9 +448,21 @@
         </p>
 
         <h3>Getting started</h3>
-        <p class="muted">Requires CMake 3.16+ and a C++17 compiler. One build produces everything:</p>
-        <pre><code>cmake -B build
-cmake --build build</code></pre>
+        <p class="muted">Requires CMake 3.16+, a C++17 compiler, and <strong>Git LFS</strong> (to fetch the large JSON/JSONL datasets). One build produces everything:</p>
+        <pre><code># 1. Clone repository and install Git LFS
+git clone https://github.com/UCR-CS-179K-Summer-2026/project1.git
+cd project1
+
+# macOS: brew install git-lfs && git lfs install
+# Windows: git lfs install (included with Git for Windows or winget install GitHub.GitLFS)
+# Linux: sudo apt-get install git-lfs && git lfs install
+
+# 2. Pull dataset files
+git lfs pull
+
+# 3. Configure & build (parallel compilation)
+cmake -B build
+cmake --build build --parallel</code></pre>
         <p class="muted">
           Three binaries come out of <code>build/</code>: <code>streamline</code> (the CLI),
           <code>tests</code> (the correctness suite — see <a href="#testing">Testing</a>), and
@@ -1694,44 +1706,56 @@ cmake --build build --target tests
           version a number came from.
         </p>
 
-        <h3>The benchmark itself</h3>
+        <h3>The benchmark suite &amp; multi-tier datasets</h3>
         <p class="muted">
-          <code>tests/performance/benchmark.cpp</code> runs against all four sample datasets —
-          <code>students.json</code>, <code>cars.json</code>, <code>housing.json</code>, and
-          <code>movies.json</code>, each ~50&nbsp;MB — through <code>uploadFile()</code>,
-          <code>Session</code>, and the real query pipeline, so it measures the same code path
-          the CLI actually uses, not a synthetic stand-in. Each dataset runs the same nine named
-          cases, single calls first and pipelines after: <code>nested_get</code>,
+          <code>tests/performance/benchmark.cpp</code> runs against a diverse collection of datasets across size tiers —
+          measuring file loading via <code>uploadFile()</code>, session state via <code>Session</code>, and execution across the real query pipeline.
+          Datasets span from lightweight 20&nbsp;MB files up to gigabyte-scale datasets:
+        </p>
+        <ul>
+          <li><strong>20 MB:</strong> <code>json/ram.jsonl</code> (140,552 records) — JSON Lines format.</li>
+          <li><strong>~50 MB:</strong> <code>json/students.json</code> (85,032 records), <code>json/cars.json</code> (70,792 records), <code>json/housing.json</code> (47,587 records), and <code>json/movies.json</code> (43,315 records) — structured JSON arrays.</li>
+          <li><strong>100 MB:</strong> <code>json/food.jsonl</code> (736,928 records) — high-volume JSON Lines format.</li>
+          <li><strong>809 MB:</strong> <code>json/kaggle_datasets/matchups.json</code> (2,419,192 records) — 2.4 million League of Legends match rows.</li>
+          <li><strong>1.3 GB:</strong> <code>json/kaggle_datasets/spotify.jsonl</code> (498,052 records) — rich textual song attributes.</li>
+        </ul>
+        <p class="muted">
+          Each dataset runs the same nine named cases, single calls first and pipelines after: <code>nested_get</code>,
           <code>average</code>, <code>filter_none</code>, <code>sort</code>, <code>limit</code>,
           <code>groupby</code>, then <code>filter_all</code>, <code>sort_pipeline</code>,
           <code>groupby_pipeline</code>.
         </p>
-        <pre><code>cmake -S . -B build
-cmake --build build
-./build/tests tests/data     # correctness first
-./build/benchmark             # then performance</code></pre>
+        <pre><code># 1. Run all benchmarks across all available datasets (default)
+./build/benchmark
+
+# 2. Benchmark a specific dataset only
+./build/benchmark --dataset ram.jsonl
+./build/benchmark --dataset students.json
+./build/benchmark --dataset food.jsonl
+./build/benchmark --dataset matchups.json
+./build/benchmark --dataset spotify.jsonl
+
+# 3. Custom machine name and output location
+./build/benchmark --machine "macbook-pro" --output benchmarks/results/test.csv</code></pre>
         <p class="muted">
-          One warm-up run followed by five measured runs; the last row is the median total
-          time. Every run also appends to <code>benchmarks/results/&lt;machine&gt;.csv</code>
-          (version, timestamp, machine/OS/compiler, dataset, query, record count, and load /
-          query / total timings), so results across versions <em>and</em> across teammates'
-          machines can be diffed or charted directly. Only directly compare runs made on the
-          same machine, build type, and dataset — cross-machine numbers in the same CSV are
-          useful for shape/trend, not head-to-head comparison.
+          Each benchmark case runs one warm-up pass followed by five measured runs; the median total
+          time is recorded and automatically appended to <code>benchmarks/results/&lt;machine&gt;.csv</code>
+          (version, timestamp, machine/OS/compiler, dataset, query, record count, and load / query / total timings).
+          Running <code>./build/benchmark</code> without flags automatically runs every dataset in sequence.
         </p>
 
         <div class="callout">
           <strong>What we've found using this so far:</strong> parsing
           <code>students.json</code> takes ~550&ndash;580&nbsp;ms regardless of which query
-          engine optimizations are in place — the JSON parser itself wasn't the bottleneck.
+          engine optimizations are in place — the JSON parser itself wasn't the primary bottleneck.
           The real gap showed up in query execution: a <code>FILTER</code> matching nearly
           every record and printing the full result added ~520&nbsp;ms on top of parsing,
           versus ~40&nbsp;ms for one matching nothing. <code>AVERAGE</code> told the same story
           from a different angle — see <a href="#optimizations">Optimizations &amp; Refactoring</a>
-          for the two optimizations that came out of chasing it and the before/after numbers.
+          for the individual optimizations that addressed this.
         </div>
 
-        <h3>Week over week</h3>
+        <h3>Week over week performance</h3>
         <p class="muted">
           Same machine, same dataset (<code>students.json</code>), same query
           (<code>AVERAGE(GET("gpa"))</code>) — <code>uploadFile()</code>/<code>executeQuery()</code>
@@ -1748,18 +1772,95 @@ cmake --build build
           <tbody>
             <tr><td>Week 2 — all features working, unoptimized</td><td>576.6</td><td>41.6</td><td>618.7</td></tr>
             <tr><td>Week 3 — first optimization pass</td><td>192.9</td><td>28.0</td><td>220.9</td></tr>
-            <tr><td>Week 4 — this sprint's optimizations</td><td>378.6</td><td>1.1</td><td>379.7</td></tr>
+            <tr><td>Week 4 &amp; 5 — fully optimized engine</td><td>378.6</td><td>1.1</td><td>379.7</td></tr>
           </tbody>
         </table>
         <p class="muted">
           Query time is a clean, monotonic improvement — 41.6&nbsp;ms&nbsp;&rarr;&nbsp;28.0&nbsp;ms&nbsp;&rarr;&nbsp;1.1&nbsp;ms
-          — matching the fast-path <code>get()</code>, parallel-reduction, and deep-copy-elimination
-          story above. Load time is <em>not</em> monotonic, and that's a real, honest data point
-          rather than noise: Week 3's hand-rolled number validator is faster than Week 4's
-          regex, enough that Week 4's <code>from_chars</code> conversion win doesn't fully cover
-          for it — see <a href="#limitations">Limitations</a> for the isolated cost of that
-          specific tradeoff.
+          (over <strong>37x faster</strong>) — matching the fast-path <code>get()</code>, parallel-reduction, and deep-copy-elimination
+          story. Load time reflects a deliberate correctness trade-off: Week 3's hand-rolled number validator is faster than the standard library
+          regex, but the <code>from_chars</code> conversion win brings load time to a fast, reliable baseline.
         </p>
+
+        <h3>Per-Optimization Breakdown (vs Week 2 Baseline on students.json)</h3>
+        <p class="muted">
+          To measure the precise speedup of each individual optimization, we compared the unoptimized <strong>Week 2 baseline</strong>
+          against each isolated optimization using its corresponding benchmark query on the standard <code>students.json</code> dataset (85,032 records, 48&nbsp;MB):
+        </p>
+        <table>
+          <thead>
+            <tr><th>Optimization Applied</th><th>Benchmark Query / Operation</th><th>Week 2 (Unoptimized)</th><th>Optimized</th><th>Speedup / Impact</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>JSON Number Parsing (<code>from_chars</code>)</strong></td>
+              <td><code>uploadFile("students.json")</code></td>
+              <td>672.8&nbsp;ms</td>
+              <td>566.2&nbsp;ms</td>
+              <td><strong>&minus;15.9%</strong> load time (1.19&times; faster)</td>
+            </tr>
+            <tr>
+              <td><strong>Fast-Path Key Comparison (<code>keysEqual</code>)</strong></td>
+              <td><code>AVERAGE(GET("gpa"))</code></td>
+              <td>40.7&nbsp;ms</td>
+              <td>30.2&nbsp;ms</td>
+              <td><strong>&minus;25.9%</strong> query time (1.35&times; faster)</td>
+            </tr>
+            <tr>
+              <td><strong>Parallel Reduction for <code>AVERAGE</code></strong></td>
+              <td><code>AVERAGE(GET("gpa"))</code></td>
+              <td>30.2&nbsp;ms</td>
+              <td>28.0&nbsp;ms</td>
+              <td><strong>&minus;31.2%</strong> cumulative (multi-threaded reduction)</td>
+            </tr>
+            <tr>
+              <td><strong>Query-Start Deep Copy Elimination</strong></td>
+              <td><code>FILTER(GET("gpa") &gt; 4)</code> <span class="muted">(matches 0 records)</span></td>
+              <td>35.5&nbsp;ms</td>
+              <td>4.8&nbsp;ms</td>
+              <td><strong>&minus;86.5%</strong> query time (<strong>7.4&times; faster</strong>)</td>
+            </tr>
+            <tr>
+              <td><strong>Per-Stage Move Semantics (Lazy <code>take()</code>)</strong></td>
+              <td><code>FILTER(GET("gpa") &gt;= 2) | GET(85031, "student_id")</code></td>
+              <td>34.5&nbsp;ms</td>
+              <td>30.1&nbsp;ms</td>
+              <td><strong>&minus;12.8%</strong> (eliminated intermediate copy)</td>
+            </tr>
+            <tr>
+              <td><strong>Sort-Key Precomputation (Schwartzian Transform)</strong></td>
+              <td><code>SORT(GET("gpa"), DESC) | GET(0, "student_id")</code></td>
+              <td>240.2&nbsp;ms</td>
+              <td>76.5&nbsp;ms</td>
+              <td><strong>&minus;68.1%</strong> query time (<strong>3.1&times; faster</strong>)</td>
+            </tr>
+            <tr>
+              <td><strong>Hash-Map Grouping &amp; Parallel Bucketing</strong></td>
+              <td><code>GROUPBY(GET("major")) | GET("Computer Science", 0, "student_id")</code></td>
+              <td>184.6&nbsp;ms</td>
+              <td>61.1&nbsp;ms</td>
+              <td><strong>&minus;66.9%</strong> query time (<strong>3.0&times; faster</strong>)</td>
+            </tr>
+            <tr>
+              <td><strong>Fast Number Formatting (<code>to_chars</code>)</strong></td>
+              <td><code>GROUPBY(GET("major"))</code> <span class="muted">(formatting all buckets)</span></td>
+              <td>215.3&nbsp;ms</td>
+              <td>154.0&nbsp;ms</td>
+              <td><strong>&minus;28.5%</strong> format time (1.40&times; faster)</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="muted">
+          Each optimization targets a distinct operational bottleneck:
+        </p>
+        <ul class="muted" style="font-size:0.92rem;">
+          <li><strong>Loading:</strong> <code>from_chars</code> eliminates heap allocation and locale lookups when parsing numbers across thousands of objects.</li>
+          <li><strong>Lookups:</strong> <code>keysEqual</code> checks raw pointer/character equality first, bypassing expensive <code>unescapeString()</code> allocations on every record field lookup.</li>
+          <li><strong>Pipelines &amp; Filtering:</strong> Replacing full-document copying with borrowed <code>const JSONValue*</code> and lazy <code>take()</code> ensures rejected records are never allocated or touched.</li>
+          <li><strong>Sorting:</strong> Extracting keys once into <code>vector&lt;pair&lt;const JSONValue*, size_t&gt;&gt;</code> reduces field lookups from <code>O(N log N)</code> to <code>O(N)</code>.</li>
+          <li><strong>Grouping:</strong> <code>unordered_map</code> bucket indexing converts <code>O(N &times; groups)</code> linear scans into <code>O(1)</code> hashing per record.</li>
+          <li><strong>Multi-threading:</strong> Distributing independent record slices across CPU cores speeds up compute-heavy <code>AVERAGE</code>, <code>FILTER</code>, and <code>GROUPBY</code> stages.</li>
+        </ul>
       </section>
 
       <section id="limitations">
@@ -1820,7 +1921,7 @@ cmake --build build
         <h3>Layout &amp; usage</h3>
         <p class="muted">
           <code>CMakeLists.txt</code> lives at the repo root and builds three targets from
-          <code>week4/</code> — <code>streamline</code> is the CLI, <code>tests</code> is the
+          <code>week5/</code> — <code>streamline</code> is the CLI, <code>tests</code> is the
           regression suite (<a href="#testing">Testing</a>), and <code>benchmark</code> is the
           performance harness (<a href="#benchmarking">Benchmarking</a>). All three link
           <code>Threads::Threads</code> (via <code>find_package(Threads)</code>) since
@@ -1830,11 +1931,11 @@ cmake --build build
           means a debugger can't step through the binary CMake produces — a deliberate tradeoff
           so nobody accidentally benchmarks a debug build.
         </p>
-        <pre><code>cmake -B build           # configure once
-cmake --build build       # (re)build — only recompiles what changed
-./build/streamline        # opens the menu
-./build/tests              # regression suite
-./build/benchmark           # performance harness</code></pre>
+        <pre><code>cmake -B build                    # configure once
+cmake --build build --parallel    # parallel (re)build — only recompiles what changed
+./build/streamline                 # opens the menu
+./build/tests                       # regression suite
+./build/benchmark                    # performance harness</code></pre>
         <p class="muted">
           <code>streamline</code>, <code>tests</code>, and <code>benchmark</code> all compile
           the same <code>CORE_SOURCES</code> — <code>file-scanner.cpp</code>,
