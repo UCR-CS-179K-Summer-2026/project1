@@ -125,7 +125,7 @@ void checkLookup(const string& text, const string& path, const string& want) {
     FileParser parser(text, ParserType::JSON);
     Session session;
     session.initialize(parser.parse(), "test");
-    string got = excecuteQuery(session, path);
+    string got = executeQuery(session, path);
 
     if (sameOutput(got, want)) {
         pass(path);
@@ -141,7 +141,7 @@ void checkQuery(const string& text, const string& query, const string& want) {
         FileParser parser(text, ParserType::JSON);
         Session session;
         session.initialize(parser.parse(), "test");
-        string got = excecuteQuery(session, query);
+        string got = executeQuery(session, query);
         if (sameOutput(got, want)) {
             pass(query);
         } else {
@@ -183,7 +183,7 @@ void checkField(const string& file, size_t index, const string& path, const stri
     //string got = index < records.size() ? formatResult(get(records[index], path)) : "<no record>";
     Session s;
     uploadFile(dataDir + "/" + file, s);
-    string got = index < s.records ? excecuteQuery(s, path) : "<no record>";
+    string got = index < s.records ? executeQuery(s, path) : "<no record>";
 
     if (got == want) {
         pass(file + "[" + to_string(index) + "] " + path);
@@ -196,7 +196,7 @@ void checkField(const string& file, size_t index, const string& path, const stri
 
 void testVersion() {
     section("version");
-    check(getVersionId() == "week4-v1", "version ID");
+    check(getVersionId() == "week5-v1", "version ID");
 }
 
 void testPrimitives() {
