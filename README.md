@@ -220,9 +220,10 @@ Result: [{"a": 2, "b": 5}]
 ## Performance Benchmarks
 
 The benchmark runs against `students.json`, `cars.json`, `housing.json`, and
-`movies.json`. Each file is 50 MB. Every query gets one warmup run and five
-recorded runs. The program prints each run and its median, then appends the
-results to a CSV file in `benchmarks/results`.
+`movies.json`. Each file is 50 MB. Every load and query gets one warmup run and
+five recorded runs. Loads are measured separately, and every query runs on a
+dataset that was loaded before its timer starts. The program prints each run
+and its median, then appends the results to a CSV file in `benchmarks/results`.
 
 - `nested_get` reads a nested value from the middle of the file.
 - `average` averages a numeric field.
@@ -238,11 +239,12 @@ results to a CSV file in `benchmarks/results`.
 ./build/benchmark
 ./build/benchmark --machine lab-mac
 ./build/benchmark --output benchmarks/results/test-run.csv
+./build/benchmark --dataset students.json
 ```
 
 Use the same machine name when collecting results on the same computer. The
 CSV records the version, machine, build information, query name, record count,
-and load, query, and total times. Use `query_ms` to compare the query cases.
-The load time is recorded separately because the file is loaded before every
-run. Standalone SORT, LIMIT, and GROUPBY include the time needed to format
-their full results.
+and load, query, and total times. Use `load_ms` to compare load cases and
+`query_ms` to compare query cases. Query times do not include loading the file.
+Standalone SORT, LIMIT, and GROUPBY include the time needed to format their
+full results.
